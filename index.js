@@ -44,36 +44,6 @@ bot.on('new_chat_members', async (ctx) => {
   });
 });
 
-// 3.- Comando para evaluar miembros actuales del grupo
-bot.command('snombre', async (ctx) => {
-  try {
-    const chatId = ctx.chat.id;
-
-    // ⚠️ IMPORTANTE: Telegram NO permite listar todos los miembros del grupo directamente.
-    // Solución: usar getChatMember en IDs conocidos o registrar usuarios conforme entren.
-    // Aquí se muestra un ejemplo con administradores:
-    const admins = await ctx.getChatAdministrators();
-
-    admins.forEach(async (admin) => {
-      const nombre = admin.user.first_name || "";
-      if (nombreInvalido(nombre)) {
-        try {
-          await ctx.kickChatMember(admin.user.id);
-          ctx.reply(`🚫 Admin baneado automáticamente: ${nombre}`);
-        } catch (err) {
-          console.error("Error al banear:", err.message);
-        }
-      }
-    });
-
-    ctx.reply("✅ Evaluación de nombres realizada (limitada por API).");
-
-  } catch (err) {
-    console.error("Error al evaluar grupo:", err.message);
-    ctx.reply("❌ No pude evaluar el grupo completo.");
-  }
-});
-
 // Lanzar el bot
 bot.launch().then(() => {
   console.log("Bot iniciado y en funciones.");
