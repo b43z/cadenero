@@ -46,5 +46,5 @@ bot.on('new_chat_members', async (ctx) => {
 
 // Lanzar el bot
 bot.launch().then(() => {
-  console.log("Bot iniciado y en funciones.");
+  console.log("El bot se encuentra en funciones y mandando alv a los misteriosos.");
 });
