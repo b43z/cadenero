@@ -24,7 +24,7 @@ function nombreInvalido(nombre) {
 
 // 1.- Comando /start
 bot.start((ctx) => {
-  ctx.reply("El bot se encuentra en funciones.");
+  ctx.reply("El bot se encuentra en funciones y mandando alv a los misteriosos.");
 });
 
 // 2.- Evaluar nuevos usuarios al ingresar
