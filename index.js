@@ -18,10 +18,9 @@ bot.start((ctx) => {
   console.log(`[INFO] Bot activado en chat: ${ctx.chat.title || ctx.chat.id}`);
 });
 
-// Evaluar nuevos usuarios en cualquier grupo
+// 1️⃣ Usuarios que entran directamente al grupo
 bot.on('new_chat_members', async (ctx) => {
-  const chatId = ctx.chat.id;
-  const chatTitle = ctx.chat.title || `Chat ${chatId}`;
+  const chatTitle = ctx.chat.title || `Chat ${ctx.chat.id}`;
 
   ctx.message.new_chat_members.forEach(async (user) => {
     const nombre = user.first_name || "";
@@ -40,6 +39,30 @@ bot.on('new_chat_members', async (ctx) => {
       console.log(`[JOIN] Nuevo usuario en "${chatTitle}" → Nombre: "${nombre}", Username: ${username}, ID: ${user.id}`);
     }
   });
+});
+
+// 2️⃣ Solicitudes de entrada en supergrupos con aprobación
+bot.on('chat_join_request', async (ctx) => {
+  const chatTitle = ctx.chat.title || `Chat ${ctx.chat.id}`;
+  const user = ctx.chatJoinRequest.from;
+  const nombre = user.first_name || "";
+  const username = user.username ? `@${user.username}` : "(sin username)";
+
+  if (nombreInvalido(nombre)) {
+    try {
+      await ctx.declineChatJoinRequest(user.id);
+      console.log(`[BAN] Solicitud rechazada en "${chatTitle}" → Nombre: "${nombre}", Username: ${username}, ID: ${user.id}`);
+    } catch (err) {
+      console.error(`[ERROR] No se pudo rechazar solicitud en "${chatTitle}" → Usuario: ${nombre}, Error: ${err.message}`);
+    }
+  } else {
+    try {
+      await ctx.approveChatJoinRequest(user.id);
+      console.log(`[JOIN] Solicitud aprobada en "${chatTitle}" → Nombre: "${nombre}", Username: ${username}, ID: ${user.id}`);
+    } catch (err) {
+      console.error(`[ERROR] No se pudo aprobar solicitud en "${chatTitle}" → Usuario: ${nombre}, Error: ${err.message}`);
+    }
+  }
 });
 
 // Lanzar el bot
