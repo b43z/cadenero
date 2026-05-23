@@ -14,8 +14,8 @@ function nombreInvalido(nombre) {
 
 // Comando /start
 bot.start((ctx) => {
-  ctx.reply("El bot se encuentra en funciones.");
-  console.log(`[INFO] Bot activado en chat: ${ctx.chat.title || ctx.chat.id}`);
+  ctx.reply("El bot se encuentra en funciones y vigilando el grupo.");
+  console.log(`[INFO] Bot activo en chat: ${ctx.chat.title || ctx.chat.id}`);
 });
 
 // 1️⃣ Usuarios que entran directamente al grupo
@@ -29,7 +29,7 @@ bot.on('new_chat_members', async (ctx) => {
     if (nombreInvalido(nombre)) {
       try {
         await ctx.kickChatMember(user.id);
-        ctx.reply(`🚫 Usuario baneado automáticamente: ${nombre}`);
+        ctx.reply(`🚫 Usuario baneado automáticamente por no contar con un nombre valido: ${nombre}`);
         console.log(`[BAN] Usuario baneado en "${chatTitle}" → Nombre: "${nombre}", Username: ${username}, ID: ${user.id}`);
       } catch (err) {
         console.error(`[ERROR] No se pudo banear en "${chatTitle}" → Usuario: ${nombre}, Error: ${err.message}`);
