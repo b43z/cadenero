@@ -24,7 +24,7 @@ function nombreInvalido(nombre) {
 
 // Mensaje de inicio
 bot.start((ctx) => {
-  ctx.reply("⚡ El bot está activo en Railway y evaluará automáticamente a los nuevos usuarios.");
+  ctx.reply("⚡ El bot está activo en el grupo y evaluará automáticamente a los nuevos usuarios.");
 });
 
 // Evaluar usuarios que entran directamente al grupo
@@ -38,7 +38,7 @@ bot.on('new_chat_members', async (ctx) => {
     if (nombreInvalido(nombre)) {
       try {
         await ctx.kickChatMember(user.id);
-        ctx.reply(`🚫 Usuario baneado automáticamente por nombre inválido: ${nombre} ${username}`);
+        ctx.reply(`🚫 Usuario baneado automáticamente por no tener un nombre válido: ${nombre} ${username}`);
       } catch (err) {
         ctx.reply(`❌ Error al intentar banear a ${nombre}: ${err.message}`);
       }
@@ -59,7 +59,7 @@ bot.on('chat_join_request', async (ctx) => {
   if (nombreInvalido(nombre)) {
     try {
       await ctx.declineChatJoinRequest(user.id);
-      ctx.reply(`🚫 Solicitud rechazada automáticamente: ${nombre} ${username}`);
+      ctx.reply(`🚫 Solicitud rechazada automáticamente por incumplir el reglmento: ${nombre} ${username}`);
     } catch (err) {
       ctx.reply(`❌ Error al rechazar solicitud de ${nombre}: ${err.message}`);
     }
@@ -75,7 +75,7 @@ bot.on('chat_join_request', async (ctx) => {
 
 // Lanzar el bot con soporte para Railway
 bot.launch().then(() => {
-  console.log("Bot iniciado en Railway y en funciones.");
+  console.log("Bot iniciado en el grupo y en funciones.");
 });
 
 // Graceful stop para Railway/Heroku/Docker
