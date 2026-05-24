@@ -1,71 +1,83 @@
 const { Telegraf } = require('telegraf');
 
-// Usa el token desde variables de entorno en Railway
+// Token desde variable de entorno en Railway
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
 // Función para validar nombres
 function nombreInvalido(nombre) {
   if (!nombre) return true;
+
+  // 1.- Solo símbolos de puntuación
   const soloSimbolos = /^[\p{P}\p{S}]+$/u.test(nombre);
-  const unCaracter = nombre.length === 1;
+
+  // 2.- Solo una letra
+  const unaLetra = /^[A-Za-zÁÉÍÓÚÜÑ]$/u.test(nombre);
+
+  // 3.- Solo emojis
   const soloEmoji = /^[\p{Emoji}]+$/u.test(nombre);
-  return soloSimbolos || unCaracter || soloEmoji;
+
+  // 4.- Dos o más letras repetidas consecutivas
+  const letrasRepetidas = /(.)\1{1,}/u.test(nombre);
+
+  return soloSimbolos || unaLetra || soloEmoji || letrasRepetidas;
 }
 
-// Comando /start
+// Mensaje de inicio
 bot.start((ctx) => {
-  ctx.reply("El bot se encuentra en funciones y vigilando el grupo.");
-  console.log(`[INFO] Bot activo en chat: ${ctx.chat.title || ctx.chat.id}`);
+  ctx.reply("⚡ El bot está activo en Railway y evaluará automáticamente a los nuevos usuarios.");
 });
 
-// 1️⃣ Usuarios que entran directamente al grupo
+// Evaluar usuarios que entran directamente al grupo
 bot.on('new_chat_members', async (ctx) => {
-  const chatTitle = ctx.chat.title || `Chat ${ctx.chat.id}`;
-
   ctx.message.new_chat_members.forEach(async (user) => {
     const nombre = user.first_name || "";
     const username = user.username ? `@${user.username}` : "(sin username)";
 
+    ctx.reply(`🔍 Evaluando nuevo miembro: ${nombre} ${username}`);
+
     if (nombreInvalido(nombre)) {
       try {
         await ctx.kickChatMember(user.id);
-        ctx.reply(`🚫 Usuario baneado automáticamente por no contar con un nombre valido: ${nombre}`);
-        console.log(`[BAN] Usuario baneado en "${chatTitle}" → Nombre: "${nombre}", Username: ${username}, ID: ${user.id}`);
+        ctx.reply(`🚫 Usuario baneado automáticamente por nombre inválido: ${nombre} ${username}`);
       } catch (err) {
-        console.error(`[ERROR] No se pudo banear en "${chatTitle}" → Usuario: ${nombre}, Error: ${err.message}`);
+        ctx.reply(`❌ Error al intentar banear a ${nombre}: ${err.message}`);
       }
     } else {
-      ctx.reply(`👋 Bienvenido ${nombre}`);
-      console.log(`[JOIN] Nuevo usuario en "${chatTitle}" → Nombre: "${nombre}", Username: ${username}, ID: ${user.id}`);
+      ctx.reply(`✅ Usuario aprobado: Bienvenido ${nombre} ${username}`);
     }
   });
 });
 
-// 2️⃣ Solicitudes de entrada en supergrupos con aprobación
+// Evaluar solicitudes de entrada en supergrupos con aprobación
 bot.on('chat_join_request', async (ctx) => {
-  const chatTitle = ctx.chat.title || `Chat ${ctx.chat.id}`;
   const user = ctx.chatJoinRequest.from;
   const nombre = user.first_name || "";
   const username = user.username ? `@${user.username}` : "(sin username)";
 
+  ctx.reply(`🔍 Evaluando solicitud de entrada: ${nombre} ${username}`);
+
   if (nombreInvalido(nombre)) {
     try {
       await ctx.declineChatJoinRequest(user.id);
-      console.log(`[BAN] Solicitud rechazada en "${chatTitle}" → Nombre: "${nombre}", Username: ${username}, ID: ${user.id}`);
+      ctx.reply(`🚫 Solicitud rechazada automáticamente: ${nombre} ${username}`);
     } catch (err) {
-      console.error(`[ERROR] No se pudo rechazar solicitud en "${chatTitle}" → Usuario: ${nombre}, Error: ${err.message}`);
+      ctx.reply(`❌ Error al rechazar solicitud de ${nombre}: ${err.message}`);
     }
   } else {
     try {
       await ctx.approveChatJoinRequest(user.id);
-      console.log(`[JOIN] Solicitud aprobada en "${chatTitle}" → Nombre: "${nombre}", Username: ${username}, ID: ${user.id}`);
+      ctx.reply(`✅ Solicitud aprobada: Bienvenido ${nombre} ${username}`);
     } catch (err) {
-      console.error(`[ERROR] No se pudo aprobar solicitud en "${chatTitle}" → Usuario: ${nombre}, Error: ${err.message}`);
+      ctx.reply(`❌ Error al aprobar solicitud de ${nombre}: ${err.message}`);
     }
   }
 });
 
-// Lanzar el bot
+// Lanzar el bot con soporte para Railway
 bot.launch().then(() => {
-  console.log("[INFO] Bot iniciado y en funciones en todos los grupos donde esté agregado.");
+  console.log("Bot iniciado en Railway y en funciones.");
 });
+
+// Graceful stop para Railway/Heroku/Docker
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
