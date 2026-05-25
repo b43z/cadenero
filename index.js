@@ -6,6 +6,9 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 // Set para rastrear usuarios ya procesados (prevenir duplicidad)
 const usuariosProcesados = new Set();
 
+// Map para rastrear grupos activos: chatId -> { nombre, usuarios_procesados, fecha_inicio }
+const gruposActivos = new Map();
+
 // Regex compiladas una sola vez (reutilización)
 const VALIDACIONES = {
   soloSimbolos: /^[\p{P}\p{S}]+$/u,
@@ -44,9 +47,38 @@ function limpiarUsuarioProcesado(userId) {
   timeoutMap.set(userId, timeout);
 }
 
+// Función para registrar un grupo activo
+function registrarGrupo(chatId, chatTitle) {
+  if (!gruposActivos.has(chatId)) {
+    gruposActivos.set(chatId, {
+      nombre: chatTitle || `Grupo ${chatId}`,
+      usuariosProcesados: 0,
+      usuariosRechazados: 0,
+      fechaInicio: new Date(),
+      id: chatId
+    });
+    console.log(`📍 Nuevo grupo registrado: ${chatTitle} (${chatId})`);
+  }
+}
+
+// Función para actualizar estadísticas del grupo
+function actualizarGrupo(chatId, aprobado = true) {
+  if (gruposActivos.has(chatId)) {
+    const grupo = gruposActivos.get(chatId);
+    grupo.usuariosProcesados++;
+    if (!aprobado) {
+      grupo.usuariosRechazados++;
+    }
+  }
+}
+
 // Función centralizada para procesar usuarios
 async function procesarUsuario(ctx, user, tipo = 'directo') {
   const userId = user.id;
+  const chatId = ctx.chat.id;
+  
+  // Registrar grupo activo
+  registrarGrupo(chatId, ctx.chat.title);
   
   // Evitar procesar el mismo usuario múltiples veces
   if (usuariosProcesados.has(userId)) {
@@ -70,12 +102,14 @@ async function procesarUsuario(ctx, user, tipo = 'directo') {
         await ctx.kickChatMember(userId);
       }
       ctx.reply(`🚫 Usuario rechazado por no tener un nombre válido: ${nombre} ${username}`);
+      actualizarGrupo(chatId, false);
       console.log(`🚫 Usuario rechazado: ${nombre} ${username}`);
     } else {
       if (tipo === 'solicitud') {
         await ctx.approveChatJoinRequest(userId);
       }
       ctx.reply(`✅ Usuario aprobado: Bienvenido ${nombre} ${username}`);
+      actualizarGrupo(chatId, true);
       console.log(`✅ Usuario aprobado: ${nombre} ${username}`);
     }
   } catch (err) {
@@ -90,6 +124,57 @@ bot.start((ctx) => {
   ctx.reply("⚡ El bot está activo en el grupo y evaluará automáticamente a los nuevos usuarios.");
 });
 
+// Comando para ver grupos activos
+bot.command('grupos', (ctx) => {
+  if (gruposActivos.size === 0) {
+    ctx.reply("📭 El bot no está activo en ningún grupo aún.");
+    return;
+  }
+
+  let mensaje = "📊 **Grupos Activos del Bot**\n\n";
+  let contador = 1;
+
+  gruposActivos.forEach((info, chatId) => {
+    const tiempoActivo = Math.floor((new Date() - info.fechaInicio) / 1000 / 60); // en minutos
+    mensaje += `${contador}. **${info.nombre}**\n`;
+    mensaje += `   • ID: \`${chatId}\`\n`;
+    mensaje += `   • Usuarios procesados: ${info.usuariosProcesados}\n`;
+    mensaje += `   • Usuarios rechazados: ${info.usuariosRechazados}\n`;
+    mensaje += `   • Tiempo activo: ${tiempoActivo} min\n\n`;
+    contador++;
+  });
+
+  ctx.reply(mensaje, { parse_mode: 'Markdown' });
+});
+
+// Comando para ver estadísticas de un grupo específico
+bot.command('estadisticas', (ctx) => {
+  const chatId = ctx.chat.id;
+  
+  if (!gruposActivos.has(chatId)) {
+    ctx.reply("📭 Este grupo no ha sido registrado aún.");
+    return;
+  }
+
+  const info = gruposActivos.get(chatId);
+  const tiempoActivo = Math.floor((new Date() - info.fechaInicio) / 1000 / 60);
+  const usuariosAprobados = info.usuariosProcesados - info.usuariosRechazados;
+  const porcentajeAprobacion = info.usuariosProcesados > 0 
+    ? ((usuariosAprobados / info.usuariosProcesados) * 100).toFixed(2)
+    : 0;
+
+  const mensaje = `📈 **Estadísticas del Grupo**\n\n` +
+    `Nombre: **${info.nombre}**\n` +
+    `ID: \`${chatId}\`\n` +
+    `Tiempo activo: ${tiempoActivo} minutos\n\n` +
+    `👥 **Usuarios Procesados:** ${info.usuariosProcesados}\n` +
+    `✅ Aprobados: ${usuariosAprobados}\n` +
+    `🚫 Rechazados: ${info.usuariosRechazados}\n` +
+    `📊 Tasa de aprobación: ${porcentajeAprobacion}%`;
+
+  ctx.reply(mensaje, { parse_mode: 'Markdown' });
+});
+
 // Evaluar usuarios que entran directamente al grupo
 bot.on('new_chat_members', async (ctx) => {
   for (const user of ctx.message.new_chat_members) {
@@ -101,6 +186,17 @@ bot.on('new_chat_members', async (ctx) => {
 bot.on('chat_join_request', async (ctx) => {
   const user = ctx.chatJoinRequest.from;
   await procesarUsuario(ctx, user, 'solicitud');
+});
+
+// Rastrear cuando el bot abandona un grupo
+bot.on('my_chat_member', (ctx) => {
+  const chatId = ctx.chat.id;
+  const nuevoEstado = ctx.myChatMember.new_chat_member.status;
+
+  if (nuevoEstado === 'left' || nuevoEstado === 'kicked') {
+    gruposActivos.delete(chatId);
+    console.log(`👋 Bot removido del grupo: ${ctx.chat.title} (${chatId})`);
+  }
 });
 
 // Lanzar el bot con soporte para Railway
