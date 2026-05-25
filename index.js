@@ -6,30 +6,42 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 // Set para rastrear usuarios ya procesados (prevenir duplicidad)
 const usuariosProcesados = new Set();
 
+// Regex compiladas una sola vez (reutilización)
+const VALIDACIONES = {
+  soloSimbolos: /^[\p{P}\p{S}]+$/u,
+  unaLetra: /^[A-Za-zÁÉÍÓÚÜÑ]$/u,
+  soloEmoji: /^[\p{Emoji}]+$/u,
+  letrasRepetidas: /(.)\1{1,}/u
+};
+
 // Función para validar nombres
 function nombreInvalido(nombre) {
   if (!nombre) return true;
 
-  // 1.- Solo símbolos de puntuación
-  const soloSimbolos = /^[\p{P}\p{S}]+$/u.test(nombre);
-
-  // 2.- Solo una letra
-  const unaLetra = /^[A-Za-zÁÉÍÓÚÜÑ]$/u.test(nombre);
-
-  // 3.- Solo emojis
-  const soloEmoji = /^[\p{Emoji}]+$/u.test(nombre);
-
-  // 4.- Dos o más letras repetidas consecutivas
-  const letrasRepetidas = /(.)\1{1,}/u.test(nombre);
-
-  return soloSimbolos || unaLetra || soloEmoji || letrasRepetidas;
+  return (
+    VALIDACIONES.soloSimbolos.test(nombre) ||
+    VALIDACIONES.unaLetra.test(nombre) ||
+    VALIDACIONES.soloEmoji.test(nombre) ||
+    VALIDACIONES.letrasRepetidas.test(nombre)
+  );
 }
+
+// Map para almacenar timeouts y evitar memory leaks
+const timeoutMap = new Map();
 
 // Función para limpiar usuarios procesados después de un tiempo
 function limpiarUsuarioProcesado(userId) {
-  setTimeout(() => {
+  // Limpiar timeout anterior si existe
+  if (timeoutMap.has(userId)) {
+    clearTimeout(timeoutMap.get(userId));
+  }
+  
+  const timeout = setTimeout(() => {
     usuariosProcesados.delete(userId);
+    timeoutMap.delete(userId);
   }, 30000); // Limpiar después de 30 segundos
+  
+  timeoutMap.set(userId, timeout);
 }
 
 // Función centralizada para procesar usuarios
@@ -47,9 +59,11 @@ async function procesarUsuario(ctx, user, tipo = 'directo') {
 
   const nombre = user.first_name || "";
   const username = user.username ? `@${user.username}` : "(sin username)";
+  const esValido = !nombreInvalido(nombre);
 
-  if (nombreInvalido(nombre)) {
-    try {
+  try {
+    // Ejecutar acción según el tipo y validez
+    if (!esValido) {
       if (tipo === 'solicitud') {
         await ctx.declineChatJoinRequest(userId);
       } else {
@@ -57,21 +71,17 @@ async function procesarUsuario(ctx, user, tipo = 'directo') {
       }
       ctx.reply(`🚫 Usuario rechazado por no tener un nombre válido: ${nombre} ${username}`);
       console.log(`🚫 Usuario rechazado: ${nombre} ${username}`);
-    } catch (err) {
-      ctx.reply(`❌ Error al procesar a ${nombre}: ${err.message}`);
-      console.error(`Error procesando usuario: ${err.message}`);
-    }
-  } else {
-    try {
+    } else {
       if (tipo === 'solicitud') {
         await ctx.approveChatJoinRequest(userId);
       }
       ctx.reply(`✅ Usuario aprobado: Bienvenido ${nombre} ${username}`);
       console.log(`✅ Usuario aprobado: ${nombre} ${username}`);
-    } catch (err) {
-      ctx.reply(`❌ Error al aprobar a ${nombre}: ${err.message}`);
-      console.error(`Error aprobando usuario: ${err.message}`);
     }
+  } catch (err) {
+    const accion = esValido ? 'aprobar' : 'procesar';
+    ctx.reply(`❌ Error al ${accion} a ${nombre}: ${err.message}`);
+    console.error(`Error ${accion} usuario:`, err.message);
   }
 }
 
@@ -94,10 +104,22 @@ bot.on('chat_join_request', async (ctx) => {
 });
 
 // Lanzar el bot con soporte para Railway
-bot.launch().then(() => {
-  console.log("Bot iniciado en el grupo y en funciones.");
-});
+bot.launch()
+  .then(() => {
+    console.log("✅ Bot iniciado en el grupo y en funciones.");
+  })
+  .catch((err) => {
+    console.error("❌ Error al iniciar el bot:", err);
+    process.exit(1);
+  });
 
 // Graceful stop para Railway/Heroku/Docker
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+process.once('SIGINT', () => {
+  console.log("⏹️ Deteniendo bot (SIGINT)...");
+  bot.stop('SIGINT');
+});
+
+process.once('SIGTERM', () => {
+  console.log("⏹️ Deteniendo bot (SIGTERM)...");
+  bot.stop('SIGTERM');
+});
