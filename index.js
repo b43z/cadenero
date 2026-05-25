@@ -113,6 +113,28 @@ bot.start((ctx) => {
   }
 });
 
+// Comando /grupos
+bot.command('grupos', (ctx) => {
+  if (gruposActivos.size === 0) {
+    ctx.reply("📭 El bot no está activo en ningún grupo aún.");
+    return;
+  }
+  let mensaje = "📊 **Grupos Activos del Bot**\n\n";
+  let contador = 1;
+  gruposActivos.forEach((info, chatId) => {
+    const tiempoActivo = Math.floor((new Date() - info.fechaInicio) / 1000 / 60);
+    const estado = gruposAutorizados.has(chatId) ? "✅ Autorizado" : "⚠️ No autorizado";
+    mensaje += `${contador}. **${info.nombre}**\n`;
+    mensaje += `   • ID: \`${chatId}\`\n`;
+    mensaje += `   • Estado: ${estado}\n`;
+    mensaje += `   • Usuarios procesados: ${info.usuariosProcesados}\n`;
+    mensaje += `   • Usuarios rechazados: ${info.usuariosRechazados}\n`;
+    mensaje += `   • Tiempo activo: ${tiempoActivo} min\n\n`;
+    contador++;
+  });
+  ctx.reply(mensaje, { parse_mode: 'Markdown' });
+});
+
 // Comando /auth
 bot.command('auth', async (ctx) => {
   const chatId = ctx.chat.id;
@@ -130,7 +152,10 @@ bot.command('auth', async (ctx) => {
   const passwordIngresado = ctx.args.join(' ');
   if (passwordIngresado === BOT_PASSWORD) {
     gruposAutorizados.add(chatId);
+
+    // 🔧 Registrar el grupo al autorizar
     registrarGrupo(chatId, ctx.chat.title);
+
     gruposPendientes.delete(chatId);
     intentosFallidos.delete(chatId);
     ctx.reply("✅ Grupo autorizado correctamente.");
