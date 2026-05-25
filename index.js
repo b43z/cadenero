@@ -301,6 +301,8 @@ bot.command('auth', async (ctx) => {
   // Verificar contraseña
   if (passwordIngresado === BOT_PASSWORD) {
     gruposAutorizados.add(chatId);
+    // 🔧 FIX: Registrar el grupo cuando se autoriza correctamente
+    registrarGrupo(chatId, ctx.chat.title);
     gruposPendientes.delete(chatId);
     intentosFallidos.delete(chatId);
     ctx.reply("✅ ¡Contraseña correcta! El grupo ha sido autorizado exitosamente.");
@@ -356,6 +358,8 @@ bot.on('my_chat_member', async (ctx) => {
       registrarGrupo(chatId, ctx.chat.title);
       console.log(`✅ Grupo ya autorizado, registrando: ${ctx.chat.title} (${chatId})`);
     } else {
+      // 🔧 FIX: Registrar el grupo incluso cuando está pendiente de autorización
+      registrarGrupo(chatId, ctx.chat.title);
       // El grupo no está autorizado, pedir contraseña
       gruposPendientes.set(chatId, {
         nombre: ctx.chat.title,
