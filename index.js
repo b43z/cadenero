@@ -9,6 +9,9 @@ const usuariosProcesados = new Set();
 // Map para rastrear grupos activos: chatId -> { nombre, usuarios_procesados, fecha_inicio }
 const gruposActivos = new Map();
 
+// Set para rastrear grupos autorizados (IDs de chat)
+const gruposAutorizados = new Set(process.env.AUTHORIZED_GROUPS?.split(',').map(id => parseInt(id)) || []);
+
 // Regex compiladas una sola vez (reutilización)
 const VALIDACIONES = {
   soloSimbolos: /^[\p{P}\p{S}]+$/u,
@@ -142,8 +145,10 @@ bot.command('grupos', (ctx) => {
 
   gruposActivos.forEach((info, chatId) => {
     const tiempoActivo = Math.floor((new Date() - info.fechaInicio) / 1000 / 60); // en minutos
+    const estado = gruposAutorizados.has(chatId) ? "✅ Autorizado" : "⚠️ No autorizado";
     mensaje += `${contador}. **${info.nombre}**\n`;
     mensaje += `   • ID: \`${chatId}\`\n`;
+    mensaje += `   • Estado: ${estado}\n`;
     mensaje += `   • Usuarios procesados: ${info.usuariosProcesados}\n`;
     mensaje += `   • Usuarios rechazados: ${info.usuariosRechazados}\n`;
     mensaje += `   • Tiempo activo: ${tiempoActivo} min\n\n`;
@@ -179,6 +184,48 @@ bot.command('estadisticas', (ctx) => {
     `📊 Tasa de aprobación: ${porcentajeAprobacion}%`;
 
   ctx.reply(mensaje, { parse_mode: 'Markdown' });
+});
+
+// Comando para eliminar grupos no autorizados
+bot.command('delgroup', async (ctx) => {
+  try {
+    // Obtener el ID del chat actual o el del argumento
+    let targetChatId = ctx.chat.id;
+    
+    // Si se proporciona un argumento, usarlo como ID del grupo a eliminar
+    if (ctx.args && ctx.args.length > 0) {
+      targetChatId = parseInt(ctx.args[0]);
+      if (isNaN(targetChatId)) {
+        ctx.reply("❌ ID de grupo inválido. Uso: `/delgroup [id_grupo]`", { parse_mode: 'Markdown' });
+        return;
+      }
+    }
+
+    // Validar que el grupo existe en gruposActivos
+    if (!gruposActivos.has(targetChatId)) {
+      ctx.reply(`❌ El grupo con ID \`${targetChatId}\` no está registrado.`, { parse_mode: 'Markdown' });
+      return;
+    }
+
+    const grupoInfo = gruposActivos.get(targetChatId);
+    
+    // Eliminar el grupo
+    gruposActivos.delete(targetChatId);
+    
+    // Intentar salir del grupo
+    try {
+      await bot.telegram.leaveChat(targetChatId);
+      ctx.reply(`🗑️ Grupo "${grupoInfo.nombre}" eliminado correctamente.\n❌ Bot removido del grupo.`, { parse_mode: 'Markdown' });
+      console.log(`🗑️ Grupo eliminado: ${grupoInfo.nombre} (${targetChatId})`);
+    } catch (err) {
+      // Si no puede salir, al menos lo registra como eliminado
+      ctx.reply(`🗑️ Grupo "${grupoInfo.nombre}" eliminado de registros.\n⚠️ No fue posible remover el bot del grupo automáticamente.`, { parse_mode: 'Markdown' });
+      console.log(`🗑️ Grupo eliminado (registro): ${grupoInfo.nombre} (${targetChatId}) - Error: ${err.message}`);
+    }
+  } catch (err) {
+    ctx.reply(`❌ Error al eliminar grupo: ${err.message}`);
+    console.error('Error en comando delgroup:', err.message);
+  }
 });
 
 // Registrar grupo cuando el bot se agrega
@@ -229,6 +276,7 @@ bot.on('chat_join_request', async (ctx) => {
 bot.launch()
   .then(() => {
     console.log("✅ Bot iniciado en el grupo y en funciones.");
+    console.log(`📋 Grupos autorizados cargados: ${gruposAutorizados.size}`);
   })
   .catch((err) => {
     console.error("❌ Error al iniciar el bot:", err);
