@@ -1,4 +1,5 @@
 const { Telegraf } = require('telegraf');
+const crypto = require('crypto');
 
 // Token desde variable de entorno en Railway
 const bot = new Telegraf(process.env.BOT_TOKEN);
@@ -84,6 +85,17 @@ function actualizarGrupo(chatId, aprobado = true) {
   }
 }
 
+// Función para verificar si un usuario es administrador del grupo
+async function esAdminDelGrupo(ctx, userId) {
+  try {
+    const miembro = await ctx.telegram.getChatMember(ctx.chat.id, userId);
+    return miembro.status === 'administrator' || miembro.status === 'creator';
+  } catch (err) {
+    console.error(`Error verificando admin para ${userId}:`, err.message);
+    return false;
+  }
+}
+
 // Función centralizada para procesar usuarios
 async function procesarUsuario(ctx, user, tipo = 'directo') {
   const userId = user.id;
@@ -109,16 +121,16 @@ async function procesarUsuario(ctx, user, tipo = 'directo') {
     // Ejecutar acción según el tipo y validez
     if (!esValido) {
       if (tipo === 'solicitud') {
-        await ctx.declineChatJoinRequest(userId);
+        await ctx.telegram.declineChatJoinRequest(ctx.chat.id, userId);
       } else {
-        await ctx.kickChatMember(userId);
+        await ctx.telegram.banChatMember(ctx.chat.id, userId);
       }
       ctx.reply(`🚫 Usuario rechazado por no tener un nombre válido: ${nombre} ${username}`);
       actualizarGrupo(chatId, false);
       console.log(`🚫 Usuario rechazado: ${nombre} ${username}`);
     } else {
       if (tipo === 'solicitud') {
-        await ctx.approveChatJoinRequest(userId);
+        await ctx.telegram.approveChatJoinRequest(ctx.chat.id, userId);
       }
       ctx.reply(`✅ Usuario aprobado: Bienvenido ${nombre} ${username}`);
       actualizarGrupo(chatId, true);
@@ -195,9 +207,16 @@ bot.command('estadisticas', (ctx) => {
   ctx.reply(mensaje, { parse_mode: 'Markdown' });
 });
 
-// Comando para eliminar grupos no autorizados
+// Comando para eliminar grupos no autorizados (solo administradores)
 bot.command('delgroup', async (ctx) => {
   try {
+    // Verificar que es admin
+    const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
+    if (!esAdmin) {
+      ctx.reply("❌ Solo administradores pueden usar este comando.");
+      return;
+    }
+
     // Obtener el ID del chat actual o el del argumento
     let targetChatId = ctx.chat.id;
     
@@ -237,13 +256,20 @@ bot.command('delgroup', async (ctx) => {
   }
 });
 
-// Comando para autenticar un grupo con contraseña
+// Comando para autenticar un grupo con contraseña (solo administradores)
 bot.command('auth', async (ctx) => {
   const chatId = ctx.chat.id;
   
   // Solo funciona en grupos
   if (!ctx.chat.type || (ctx.chat.type !== 'group' && ctx.chat.type !== 'supergroup')) {
     ctx.reply("❌ Este comando solo funciona en grupos.");
+    return;
+  }
+
+  // Verificar que es admin
+  const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
+  if (!esAdmin) {
+    ctx.reply("❌ Solo administradores pueden usar este comando.");
     return;
   }
 
@@ -341,7 +367,7 @@ bot.on('my_chat_member', async (ctx) => {
         "🔐 **Bienvenido Bot de Validación de Usuarios**\n\n" +
         "Este grupo requiere autenticación para usar el bot.\n" +
         "Por favor, proporciona la contraseña usando el comando:\n\n" +
-        "`/apass`\n\n" +
+        "`/auth contraseña`\n\n" +
         "Si no tienes la contraseña, contacta al administrador del bot.",
         { parse_mode: 'Markdown' }
       );
