@@ -175,6 +175,26 @@ bot.command('estadisticas', (ctx) => {
   ctx.reply(mensaje, { parse_mode: 'Markdown' });
 });
 
+// Registrar grupo cuando el bot se agrega
+bot.on('my_chat_member', (ctx) => {
+  const chatId = ctx.chat.id;
+  const nuevoEstado = ctx.myChatMember.new_chat_member.status;
+  const estadoAnterior = ctx.myChatMember.old_chat_member.status;
+
+  // Cuando el bot entra al grupo
+  if ((estadoAnterior === 'left' || estadoAnterior === 'kicked') && 
+      (nuevoEstado === 'member' || nuevoEstado === 'administrator' || nuevoEstado === 'creator')) {
+    registrarGrupo(chatId, ctx.chat.title);
+    console.log(`✅ Bot agregado al grupo: ${ctx.chat.title} (${chatId})`);
+  }
+
+  // Cuando el bot se va o es removido
+  if (nuevoEstado === 'left' || nuevoEstado === 'kicked') {
+    gruposActivos.delete(chatId);
+    console.log(`👋 Bot removido del grupo: ${ctx.chat.title} (${chatId})`);
+  }
+});
+
 // Evaluar usuarios que entran directamente al grupo
 bot.on('new_chat_members', async (ctx) => {
   for (const user of ctx.message.new_chat_members) {
@@ -186,17 +206,6 @@ bot.on('new_chat_members', async (ctx) => {
 bot.on('chat_join_request', async (ctx) => {
   const user = ctx.chatJoinRequest.from;
   await procesarUsuario(ctx, user, 'solicitud');
-});
-
-// Rastrear cuando el bot abandona un grupo
-bot.on('my_chat_member', (ctx) => {
-  const chatId = ctx.chat.id;
-  const nuevoEstado = ctx.myChatMember.new_chat_member.status;
-
-  if (nuevoEstado === 'left' || nuevoEstado === 'kicked') {
-    gruposActivos.delete(chatId);
-    console.log(`👋 Bot removido del grupo: ${ctx.chat.title} (${chatId})`);
-  }
 });
 
 // Lanzar el bot con soporte para Railway
