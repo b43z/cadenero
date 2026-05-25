@@ -121,7 +121,13 @@ async function procesarUsuario(ctx, user, tipo = 'directo') {
 
 // Mensaje de inicio
 bot.start((ctx) => {
-  ctx.reply("⚡ El bot está activo en el grupo y evaluará automáticamente a los nuevos usuarios.");
+  // Si se ejecuta en un grupo, registrarlo
+  if (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup') {
+    registrarGrupo(ctx.chat.id, ctx.chat.title);
+    ctx.reply("⚡ Bot activado en este grupo. Evaluará automáticamente a los nuevos usuarios.");
+  } else {
+    ctx.reply("⚡ El bot está activo en el grupo y evaluará automáticamente a los nuevos usuarios.");
+  }
 });
 
 // Comando para ver grupos activos
@@ -181,8 +187,10 @@ bot.on('my_chat_member', (ctx) => {
   const nuevoEstado = ctx.myChatMember.new_chat_member.status;
   const estadoAnterior = ctx.myChatMember.old_chat_member.status;
 
-  // Cuando el bot entra al grupo
-  if ((estadoAnterior === 'left' || estadoAnterior === 'kicked') && 
+  console.log(`Estado anterior: ${estadoAnterior} → Estado nuevo: ${nuevoEstado}`);
+
+  // Cuando el bot entra al grupo (cualquier transición hacia un estado activo)
+  if ((estadoAnterior === 'left' || estadoAnterior === 'kicked' || !estadoAnterior) && 
       (nuevoEstado === 'member' || nuevoEstado === 'administrator' || nuevoEstado === 'creator')) {
     registrarGrupo(chatId, ctx.chat.title);
     console.log(`✅ Bot agregado al grupo: ${ctx.chat.title} (${chatId})`);
@@ -193,6 +201,15 @@ bot.on('my_chat_member', (ctx) => {
     gruposActivos.delete(chatId);
     console.log(`👋 Bot removido del grupo: ${ctx.chat.title} (${chatId})`);
   }
+});
+
+// Registrar grupo automáticamente cuando llegan mensajes
+bot.on('message', (ctx, next) => {
+  // Registrar grupo si no está en el mapa
+  if ((ctx.chat.type === 'group' || ctx.chat.type === 'supergroup') && !gruposActivos.has(ctx.chat.id)) {
+    registrarGrupo(ctx.chat.id, ctx.chat.title);
+  }
+  return next();
 });
 
 // Evaluar usuarios que entran directamente al grupo
