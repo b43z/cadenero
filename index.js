@@ -123,7 +123,7 @@ bot.command('grupos', (ctx) => {
   let contador = 1;
   gruposActivos.forEach((info, chatId) => {
     const tiempoActivo = Math.floor((new Date() - info.fechaInicio) / 1000 / 60);
-    const estado = gruposAutorizados.has(chatId) ? "✅ Autorizado" : "⚠️ No autorizado";
+    const estado = gruposAutorizados.has(chatId) ? "✅ Autorizado" : "⚠️ Pendiente";
     mensaje += `${contador}. **${info.nombre}**\n`;
     mensaje += `   • ID: \`${chatId}\`\n`;
     mensaje += `   • Estado: ${estado}\n`;
@@ -152,10 +152,7 @@ bot.command('auth', async (ctx) => {
   const passwordIngresado = ctx.args.join(' ');
   if (passwordIngresado === BOT_PASSWORD) {
     gruposAutorizados.add(chatId);
-
-    // 🔧 Registrar el grupo al autorizar
-    registrarGrupo(chatId, ctx.chat.title);
-
+    registrarGrupo(chatId, ctx.chat.title); // 🔧 fuerza registro
     gruposPendientes.delete(chatId);
     intentosFallidos.delete(chatId);
     ctx.reply("✅ Grupo autorizado correctamente.");
@@ -175,6 +172,7 @@ bot.on('my_chat_member', async (ctx) => {
       (['member','administrator','creator'].includes(nuevoEstado))) {
     if (gruposAutorizados.has(chatId)) {
       registrarGrupo(chatId, ctx.chat.title);
+      console.log(`✅ Grupo ya autorizado: ${ctx.chat.title} (${chatId})`);
     } else {
       registrarGrupo(chatId, ctx.chat.title);
       gruposPendientes.set(chatId, {
@@ -194,7 +192,14 @@ bot.on('my_chat_member', async (ctx) => {
 
 bot.on('new_chat_members', async (ctx) => {
   const chatId = ctx.chat.id;
-  if (!gruposAutorizados.has(chatId)) return;
+  if (!gruposAutorizados.has(chatId)) {
+    if (gruposActivos.has(chatId)) {
+      console.log(`ℹ️ Grupo activo pero pendiente: ${ctx.chat.title} (${chatId})`);
+    } else {
+      console.log(`⚠️ Nuevo miembro en grupo no autorizado: ${ctx.chat.title} (${chatId})`);
+      return;
+    }
+  }
   for (const user of ctx.message.new_chat_members) {
     await procesarUsuario(ctx, user, 'directo');
   }
@@ -202,19 +207,16 @@ bot.on('new_chat_members', async (ctx) => {
 
 bot.on('chat_join_request', async (ctx) => {
   const chatId = ctx.chat.id;
-  if (!gruposAutorizados.has(chatId)) return;
+  if (!gruposAutorizados.has(chatId)) {
+    if (gruposActivos.has(chatId)) {
+      console.log(`ℹ️ Solicitud en grupo activo pero pendiente: ${ctx.chat.title} (${chatId})`);
+    } else {
+      console.log(`⚠️ Solicitud en grupo no autorizado: ${ctx.chat.title} (${chatId})`);
+      return;
+    }
+  }
   const user = ctx.chatJoinRequest.from;
   await procesarUsuario(ctx, user, 'solicitud');
 });
 
-// Lanzar bot en Railway
-bot.launch()
-  .then(() => console.log("✅ Bot iniciado en Railway."))
-  .catch((err) => {
-    console.error("❌ Error al iniciar:", err);
-    process.exit(1);
-  });
-
-// Graceful stop
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+//
