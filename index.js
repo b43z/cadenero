@@ -1,20 +1,15 @@
 const { Telegraf } = require('telegraf');
 const crypto = require('crypto');
 
-// Token desde variable de entorno en Railway
 const bot = new Telegraf(process.env.BOT_TOKEN);
-
-// Contraseña para autorizar grupos
 const BOT_PASSWORD = 'b43z6028-cirrus';
 
-// Sets y Maps para rastreo
 const usuariosProcesados = new Set();
 const gruposActivos = new Map();
 const gruposAutorizados = new Set(process.env.AUTHORIZED_GROUPS?.split(',').map(id => parseInt(id)) || []);
 const gruposPendientes = new Map();
 const intentosFallidos = new Map();
 
-// Regex para validaciones
 const VALIDACIONES = {
   soloSimbolos: /^[\p{P}\p{S}]+$/u,
   unaLetra: /^[A-Za-zÁÉÍÓÚÜÑ]$/u,
@@ -32,7 +27,6 @@ function nombreInvalido(nombre) {
   );
 }
 
-// Timeout para limpiar usuarios procesados
 const timeoutMap = new Map();
 function limpiarUsuarioProcesado(userId) {
   if (timeoutMap.has(userId)) clearTimeout(timeoutMap.get(userId));
@@ -43,7 +37,6 @@ function limpiarUsuarioProcesado(userId) {
   timeoutMap.set(userId, timeout);
 }
 
-// Registrar grupo
 function registrarGrupo(chatId, chatTitle) {
   if (!gruposActivos.has(chatId)) {
     gruposActivos.set(chatId, {
@@ -57,7 +50,6 @@ function registrarGrupo(chatId, chatTitle) {
   }
 }
 
-// Actualizar estadísticas
 function actualizarGrupo(chatId, aprobado = true) {
   if (gruposActivos.has(chatId)) {
     const grupo = gruposActivos.get(chatId);
@@ -66,7 +58,6 @@ function actualizarGrupo(chatId, aprobado = true) {
   }
 }
 
-// Verificar admin
 async function esAdminDelGrupo(ctx, userId) {
   try {
     const miembro = await ctx.telegram.getChatMember(ctx.chat.id, userId);
@@ -76,7 +67,6 @@ async function esAdminDelGrupo(ctx, userId) {
   }
 }
 
-// Procesar usuario
 async function procesarUsuario(ctx, user, tipo = 'directo') {
   const userId = user.id;
   const chatId = ctx.chat.id;
@@ -132,7 +122,7 @@ bot.command('auth', async (ctx) => {
     gruposAutorizados.add(chatId);
     registrarGrupo(chatId, ctx.chat.title);
 
-    // 🔧 Limpieza completa al autorizar
+    // Limpieza completa al autorizar
     gruposPendientes.delete(chatId);
     intentosFallidos.delete(chatId);
 
@@ -170,7 +160,7 @@ bot.on('my_chat_member', async (ctx) => {
     
     if (gruposAutorizados.has(chatId)) {
       registrarGrupo(chatId, ctx.chat.title);
-      console.log(`✅ Grupo autorizado: ${ctx.chat.title} (${chatId})`);
+      console.log(`✅ Grupo ya autorizado: ${ctx.chat.title} (${chatId})`);
     } else {
       registrarGrupo(chatId, ctx.chat.title);
       gruposPendientes.set(chatId, {
