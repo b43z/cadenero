@@ -2,19 +2,25 @@ const { Telegraf } = require('telegraf');
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const BOT_PASSWORD = process.env.BOT_PASSWORD || 'b43z6028-cirrus';
 
+// Estado en memoria
 const usuariosProcesados = new Set();
 const gruposActivos = new Map();
-const gruposAutorizados = new Set(process.env.AUTHORIZED_GROUPS?.split(',').map(id => parseInt(id)) || []);
+const gruposAutorizados = new Set(
+  (process.env.AUTHORIZED_GROUPS || "")
+    .split(",")
+    .filter(id => id)
+    .map(id => parseInt(id))
+);
 const gruposPendientes = new Map();
 const intentosFallidos = new Map();
 
+// Validaciones de nombres
 const VALIDACIONES = {
   soloSimbolos: /^[\p{P}\p{S}]+$/u,
   unaLetra: /^[A-Za-zÁÉÍÓÚÜÑ]$/u,
   soloEmoji: /^[\p{Emoji}]+$/u,
   letrasRepetidas: /(.)\1{1,}/u
 };
-
 function nombreInvalido(nombre) {
   if (!nombre) return true;
   return (
@@ -25,6 +31,7 @@ function nombreInvalido(nombre) {
   );
 }
 
+// Utilidades
 const timeoutMap = new Map();
 function limpiarUsuarioProcesado(userId) {
   if (timeoutMap.has(userId)) clearTimeout(timeoutMap.get(userId));
@@ -105,12 +112,8 @@ bot.use((ctx, next) => {
 
 // Comando /start
 bot.start((ctx) => {
-  if (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup') {
-    registrarGrupo(ctx.chat.id, ctx.chat.title);
-    ctx.reply("⚡ Bot activado en este grupo. Evaluará automáticamente a los nuevos usuarios.");
-  } else {
-    ctx.reply("⚡ El bot está activo y evaluará automáticamente a los nuevos usuarios en los grupos.");
-  }
+  registrarGrupo(ctx.chat.id, ctx.chat.title);
+  ctx.reply("⚡ Bot activado. Evaluará automáticamente a los nuevos usuarios.");
 });
 
 // Comando /grupos
@@ -152,7 +155,7 @@ bot.command('auth', async (ctx) => {
   const passwordIngresado = ctx.args.join(' ');
   if (passwordIngresado === BOT_PASSWORD) {
     gruposAutorizados.add(chatId);
-    registrarGrupo(chatId, ctx.chat.title); // 🔧 fuerza registro
+    registrarGrupo(chatId, ctx.chat.title);
     gruposPendientes.delete(chatId);
     intentosFallidos.delete(chatId);
     ctx.reply("✅ Grupo autorizado correctamente.");
@@ -177,7 +180,6 @@ bot.on('my_chat_member', async (ctx) => {
       registrarGrupo(chatId, ctx.chat.title);
       gruposPendientes.set(chatId, {
         nombre: ctx.chat.title,
-        usuario_que_agrego: ctx.myChatMember.new_chat_member.user.username || ctx.myChatMember.new_chat_member.user.first_name,
         fecha_solicitud: new Date()
       });
       ctx.reply("🔐 Este grupo requiere autenticación. Usa: `/auth contraseña`");
@@ -193,12 +195,8 @@ bot.on('my_chat_member', async (ctx) => {
 bot.on('new_chat_members', async (ctx) => {
   const chatId = ctx.chat.id;
   if (!gruposAutorizados.has(chatId)) {
-    if (gruposActivos.has(chatId)) {
-      console.log(`ℹ️ Grupo activo pero pendiente: ${ctx.chat.title} (${chatId})`);
-    } else {
-      console.log(`⚠️ Nuevo miembro en grupo no autorizado: ${ctx.chat.title} (${chatId})`);
-      return;
-    }
+    ctx.reply("⚠️ Este grupo aún no está autorizado. Usa `/auth contraseña`.");
+    return;
   }
   for (const user of ctx.message.new_chat_members) {
     await procesarUsuario(ctx, user, 'directo');
@@ -208,15 +206,21 @@ bot.on('new_chat_members', async (ctx) => {
 bot.on('chat_join_request', async (ctx) => {
   const chatId = ctx.chat.id;
   if (!gruposAutorizados.has(chatId)) {
-    if (gruposActivos.has(chatId)) {
-      console.log(`ℹ️ Solicitud en grupo activo pero pendiente: ${ctx.chat.title} (${chatId})`);
-    } else {
-      console.log(`⚠️ Solicitud en grupo no autorizado: ${ctx.chat.title} (${chatId})`);
-      return;
-    }
+    ctx.reply("⚠️ Este grupo aún no está autorizado. Usa `/auth contraseña`.");
+    return;
   }
   const user = ctx.chatJoinRequest.from;
   await procesarUsuario(ctx, user, 'solicitud');
 });
 
-//
+// Lanzar bot en Railway
+bot.launch()
+  .then(() => console.log("✅ Bot iniciado en Railway."))
+  .catch((err) => {
+    console.error("❌ Error al iniciar:", err);
+    process.exit(1);
+  });
+
+// Graceful stop
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
