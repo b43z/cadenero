@@ -165,6 +165,48 @@ bot.command('auth', async (ctx) => {
   }
 });
 
+// Comando /delgrupo <id>
+bot.command('delgrupo', async (ctx) => {
+  const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
+  if (!esAdmin) {
+    ctx.reply("❌ Solo administradores pueden usar este comando.");
+    return;
+  }
+  if (!ctx.args || ctx.args.length === 0) {
+    ctx.reply("❌ Uso: `/delgrupo <id>`", { parse_mode: 'Markdown' });
+    return;
+  }
+  const idEliminar = parseInt(ctx.args[0]);
+  if (gruposActivos.has(idEliminar)) {
+    gruposActivos.delete(idEliminar);
+    gruposAutorizados.delete(idEliminar);
+    gruposPendientes.delete(idEliminar);
+    intentosFallidos.delete(idEliminar);
+    ctx.reply(`🗑️ Grupo eliminado: ${idEliminar}`);
+    console.log(`🗑️ Grupo eliminado manualmente: ${idEliminar}`);
+  } else {
+    ctx.reply("⚠️ Ese grupo no está registrado.");
+  }
+});
+
+// Limpieza automática de grupos pendientes
+setInterval(async () => {
+  const ahora = new Date();
+  for (const [chatId, info] of gruposPendientes.entries()) {
+    const minutosPendiente = (ahora - info.fecha_solicitud) / 1000 / 60;
+    if (minutosPendiente > 10) {
+      try {
+        await bot.telegram.leaveChat(chatId);
+        gruposPendientes.delete(chatId);
+        gruposActivos.delete(chatId);
+        intentosFallidos.delete(chatId);
+        console.log(`⏱️ Grupo eliminado automáticamente por no autorizarse: ${chatId}`);
+      } catch (err) {
+        console.error(`Error al salir del grupo ${chatId}:`, err.message);
+      }
+    }
+  }
+}, 60000);
 // Eventos
 bot.on('my_chat_member', async (ctx) => {
   const chatId = ctx.chat.id;
@@ -189,6 +231,7 @@ bot.on('my_chat_member', async (ctx) => {
     gruposActivos.delete(chatId);
     gruposPendientes.delete(chatId);
     intentosFallidos.delete(chatId);
+    console.log(`🗑️ Bot eliminado del grupo: ${chatId}`);
   }
 });
 
