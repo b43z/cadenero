@@ -1,6 +1,6 @@
 const { Telegraf } = require('telegraf');
 const bot = new Telegraf(process.env.BOT_TOKEN);
-const BOT_PASSWORD = 'b43z6028-cirrus';
+const BOT_PASSWORD = process.env.BOT_PASSWORD || 'b43z6028-cirrus';
 
 const usuariosProcesados = new Set();
 const gruposActivos = new Map();
@@ -44,6 +44,7 @@ function registrarGrupo(chatId, chatTitle) {
       fechaInicio: new Date(),
       id: chatId
     });
+    console.log(`📍 Grupo registrado: ${chatTitle} (${chatId})`);
   }
 }
 
@@ -93,24 +94,39 @@ async function procesarUsuario(ctx, user, tipo = 'directo') {
   }
 }
 
-// --- Comando /start reintegrado ---
+// Middleware para habilitar ctx.args
+bot.use((ctx, next) => {
+  if (ctx.message && ctx.message.text) {
+    const parts = ctx.message.text.split(' ');
+    ctx.args = parts.slice(1);
+  }
+  return next();
+});
+
+// Comando /start
 bot.start((ctx) => {
   if (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup') {
     registrarGrupo(ctx.chat.id, ctx.chat.title);
     ctx.reply("⚡ Bot activado en este grupo. Evaluará automáticamente a los nuevos usuarios.");
   } else {
-    ctx.reply("⚡ El bot está activo en el grupo y evaluará automáticamente a los nuevos usuarios.");
+    ctx.reply("⚡ El bot está activo y evaluará automáticamente a los nuevos usuarios en los grupos.");
   }
 });
 
+// Comando /auth
 bot.command('auth', async (ctx) => {
   const chatId = ctx.chat.id;
   if (!['group','supergroup'].includes(ctx.chat.type)) return;
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) return;
-  if (gruposAutorizados.has(chatId)) return;
-  if (!ctx.args || ctx.args.length === 0) return;
-
+  if (gruposAutorizados.has(chatId)) {
+    ctx.reply("✅ Este grupo ya está autorizado.");
+    return;
+  }
+  if (!ctx.args || ctx.args.length === 0) {
+    ctx.reply("❌ Uso: `/auth contraseña`", { parse_mode: 'Markdown' });
+    return;
+  }
   const passwordIngresado = ctx.args.join(' ');
   if (passwordIngresado === BOT_PASSWORD) {
     gruposAutorizados.add(chatId);
@@ -118,27 +134,13 @@ bot.command('auth', async (ctx) => {
     gruposPendientes.delete(chatId);
     intentosFallidos.delete(chatId);
     ctx.reply("✅ Grupo autorizado correctamente.");
+    console.log(`🔑 Grupo autorizado: ${ctx.chat.title} (${chatId})`);
   } else {
-    if (!intentosFallidos.has(chatId)) {
-      intentosFallidos.set(chatId, { intentos: 0, fecha_ultimo_intento: new Date() });
-    }
-    const intento = intentosFallidos.get(chatId);
-    intento.intentos++;
-    intento.fecha_ultimo_intento = new Date();
-    if (intento.intentos >= 3) {
-      ctx.reply("🔒 Demasiados intentos fallidos. El bot se retirará en 30 segundos.");
-      setTimeout(async () => {
-        await bot.telegram.leaveChat(chatId);
-        gruposActivos.delete(chatId);
-        gruposPendientes.delete(chatId);
-        intentosFallidos.delete(chatId);
-      }, 30000);
-    } else {
-      ctx.reply(`❌ Contraseña incorrecta. Intentos restantes: ${3 - intento.intentos}`);
-    }
+    ctx.reply("❌ Contraseña incorrecta.");
   }
 });
 
+// Eventos
 bot.on('my_chat_member', async (ctx) => {
   const chatId = ctx.chat.id;
   const nuevoEstado = ctx.myChatMember.new_chat_member.status;
@@ -180,12 +182,14 @@ bot.on('chat_join_request', async (ctx) => {
   await procesarUsuario(ctx, user, 'solicitud');
 });
 
+// Lanzar bot en Railway
 bot.launch()
-  .then(() => console.log("✅ Bot iniciado."))
+  .then(() => console.log("✅ Bot iniciado en Railway."))
   .catch((err) => {
     console.error("❌ Error al iniciar:", err);
     process.exit(1);
   });
 
+// Graceful stop
 process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
