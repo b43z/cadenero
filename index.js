@@ -1,6 +1,4 @@
 const { Telegraf } = require('telegraf');
-const crypto = require('crypto');
-
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const BOT_PASSWORD = 'b43z6028-cirrus';
 
@@ -46,7 +44,6 @@ function registrarGrupo(chatId, chatTitle) {
       fechaInicio: new Date(),
       id: chatId
     });
-    console.log(`📍 Nuevo grupo registrado: ${chatTitle} (${chatId})`);
   }
 }
 
@@ -96,38 +93,31 @@ async function procesarUsuario(ctx, user, tipo = 'directo') {
   }
 }
 
-// --- Comando /auth corregido ---
+// --- Comando /start reintegrado ---
+bot.start((ctx) => {
+  if (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup') {
+    registrarGrupo(ctx.chat.id, ctx.chat.title);
+    ctx.reply("⚡ Bot activado en este grupo. Evaluará automáticamente a los nuevos usuarios.");
+  } else {
+    ctx.reply("⚡ El bot está activo en el grupo y evaluará automáticamente a los nuevos usuarios.");
+  }
+});
+
 bot.command('auth', async (ctx) => {
   const chatId = ctx.chat.id;
-  if (!['group','supergroup'].includes(ctx.chat.type)) {
-    ctx.reply("❌ Este comando solo funciona en grupos.");
-    return;
-  }
+  if (!['group','supergroup'].includes(ctx.chat.type)) return;
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
-  if (!esAdmin) {
-    ctx.reply("❌ Solo administradores pueden usar este comando.");
-    return;
-  }
-  if (gruposAutorizados.has(chatId)) {
-    ctx.reply("✅ Este grupo ya está autorizado.");
-    return;
-  }
-  if (!ctx.args || ctx.args.length === 0) {
-    ctx.reply("❌ Por favor proporciona la contraseña. Uso: `/auth contraseña`", { parse_mode: 'Markdown' });
-    return;
-  }
-  const passwordIngresado = ctx.args.join(' ');
+  if (!esAdmin) return;
+  if (gruposAutorizados.has(chatId)) return;
+  if (!ctx.args || ctx.args.length === 0) return;
 
+  const passwordIngresado = ctx.args.join(' ');
   if (passwordIngresado === BOT_PASSWORD) {
     gruposAutorizados.add(chatId);
     registrarGrupo(chatId, ctx.chat.title);
-
-    // Limpieza completa al autorizar
     gruposPendientes.delete(chatId);
     intentosFallidos.delete(chatId);
-
-    ctx.reply("✅ ¡Contraseña correcta! El grupo ha sido autorizado exitosamente.");
-    console.log(`🔑 Grupo autorizado: ${ctx.chat.title} (${chatId})`);
+    ctx.reply("✅ Grupo autorizado correctamente.");
   } else {
     if (!intentosFallidos.has(chatId)) {
       intentosFallidos.set(chatId, { intentos: 0, fecha_ultimo_intento: new Date() });
@@ -149,7 +139,6 @@ bot.command('auth', async (ctx) => {
   }
 });
 
-// --- Evento my_chat_member corregido ---
 bot.on('my_chat_member', async (ctx) => {
   const chatId = ctx.chat.id;
   const nuevoEstado = ctx.myChatMember.new_chat_member.status;
@@ -157,10 +146,8 @@ bot.on('my_chat_member', async (ctx) => {
 
   if ((estadoAnterior === 'left' || estadoAnterior === 'kicked' || !estadoAnterior) &&
       (['member','administrator','creator'].includes(nuevoEstado))) {
-    
     if (gruposAutorizados.has(chatId)) {
       registrarGrupo(chatId, ctx.chat.title);
-      console.log(`✅ Grupo ya autorizado: ${ctx.chat.title} (${chatId})`);
     } else {
       registrarGrupo(chatId, ctx.chat.title);
       gruposPendientes.set(chatId, {
@@ -168,16 +155,9 @@ bot.on('my_chat_member', async (ctx) => {
         usuario_que_agrego: ctx.myChatMember.new_chat_member.user.username || ctx.myChatMember.new_chat_member.user.first_name,
         fecha_solicitud: new Date()
       });
-      ctx.reply(
-        "🔐 **Bienvenido Bot de Validación de Usuarios**\n\n" +
-        "Este grupo requiere autenticación.\n" +
-        "Usa: `/auth contraseña`\n\n" +
-        "Si no tienes la contraseña, contacta al administrador.",
-        { parse_mode: 'Markdown' }
-      );
+      ctx.reply("🔐 Este grupo requiere autenticación. Usa: `/auth contraseña`");
     }
   }
-
   if (nuevoEstado === 'left' || nuevoEstado === 'kicked') {
     gruposActivos.delete(chatId);
     gruposPendientes.delete(chatId);
@@ -185,7 +165,6 @@ bot.on('my_chat_member', async (ctx) => {
   }
 });
 
-// --- Eventos de usuarios ---
 bot.on('new_chat_members', async (ctx) => {
   const chatId = ctx.chat.id;
   if (!gruposAutorizados.has(chatId)) return;
@@ -201,17 +180,12 @@ bot.on('chat_join_request', async (ctx) => {
   await procesarUsuario(ctx, user, 'solicitud');
 });
 
-// Lanzar bot
 bot.launch()
-  .then(() => {
-    console.log("✅ Bot iniciado.");
-    console.log(`📋 Grupos autorizados: ${gruposAutorizados.size}`);
-  })
+  .then(() => console.log("✅ Bot iniciado."))
   .catch((err) => {
     console.error("❌ Error al iniciar:", err);
     process.exit(1);
   });
 
-// Graceful stop
 process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'
