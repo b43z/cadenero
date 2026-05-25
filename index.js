@@ -29,11 +29,9 @@ bot.start((ctx) => {
 
 // Evaluar usuarios que entran directamente al grupo
 bot.on('new_chat_members', async (ctx) => {
-  ctx.message.new_chat_members.forEach(async (user) => {
+  for (const user of ctx.message.new_chat_members) {
     const nombre = user.first_name || "";
     const username = user.username ? `@${user.username}` : "(sin username)";
-
-    ctx.reply(`🔍 Evaluando nuevo miembro: ${nombre} ${username}`);
 
     if (nombreInvalido(nombre)) {
       try {
@@ -45,7 +43,7 @@ bot.on('new_chat_members', async (ctx) => {
     } else {
       ctx.reply(`✅ Usuario aprobado: Bienvenido ${nombre} ${username}`);
     }
-  });
+  }
 });
 
 // Evaluar solicitudes de entrada en supergrupos con aprobación
@@ -54,12 +52,10 @@ bot.on('chat_join_request', async (ctx) => {
   const nombre = user.first_name || "";
   const username = user.username ? `@${user.username}` : "(sin username)";
 
-  ctx.reply(`🔍 Evaluando solicitud de entrada: ${nombre} ${username}`);
-
   if (nombreInvalido(nombre)) {
     try {
       await ctx.declineChatJoinRequest(user.id);
-      ctx.reply(`🚫 Solicitud rechazada automáticamente por incumplir el reglmento: ${nombre} ${username}`);
+      ctx.reply(`🚫 Solicitud rechazada automáticamente por incumplir el reglamento: ${nombre} ${username}`);
     } catch (err) {
       ctx.reply(`❌ Error al rechazar solicitud de ${nombre}: ${err.message}`);
     }
