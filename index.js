@@ -341,7 +341,7 @@ bot.on('my_chat_member', async (ctx) => {
         "🔐 **Bienvenido Bot de Validación de Usuarios**\n\n" +
         "Este grupo requiere autenticación para usar el bot.\n" +
         "Por favor, proporciona la contraseña usando el comando:\n\n" +
-        "`/auth contraseña`\n\n" +
+        "`/apass`\n\n" +
         "Si no tienes la contraseña, contacta al administrador del bot.",
         { parse_mode: 'Markdown' }
       );
