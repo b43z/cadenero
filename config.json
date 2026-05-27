@@ -1,0 +1,8 @@
+{
+  "global": {
+    "warns": 3,
+    "banDuration": 86400000,
+    "modo": "global"
+  },
+  "grupos": {}
+}
