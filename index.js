@@ -19,7 +19,7 @@ const VALIDACIONES = {
   soloSimbolos: /^[\p{P}\p{S}]+$/u,
   unaLetra: /^[A-Za-zÁÉÍÓÚÜÑ]$/u,
   soloEmoji: /^[\p{Emoji}]+$/u,
-  letrasRepetidas: /(.)\1{1,}/u
+  letrasRepetidas: /(.)\1{2,}/u
 };
 function nombreInvalido(nombre) {
   if (!nombre) return true;
@@ -27,7 +27,7 @@ function nombreInvalido(nombre) {
     VALIDACIONES.soloSimbolos.test(nombre) ||
     VALIDACIONES.unaLetra.test(nombre) ||
     VALIDACIONES.soloEmoji.test(nombre) ||
-    VALIDACIONES.letrasRepetidas.test(nombre)
+    VALIDACIONES.letrasRepetidas.test(nombre) // ahora solo detecta 3+ repeticiones
   );
 }
 
