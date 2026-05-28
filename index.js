@@ -3,6 +3,10 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 const BOT_PASSWORD = process.env.BOT_PASSWORD || 'b43z6028-cirrus';
 const fs = require('fs');
 
+bot.start((ctx) => {
+  ctx.reply("⚡ El Cadenero está en funciones.");
+});
+
 // Middleware para habilitar ctx.args
 bot.use((ctx, next) => {
   if (ctx.message && ctx.message.text) {
