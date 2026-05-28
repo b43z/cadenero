@@ -125,34 +125,12 @@ bot.command('grupos', async (ctx) => {
   const msg = await ctx.reply(mensaje, { parse_mode: 'Markdown' });
   borrarMensaje(ctx, msg);
 });
-// Comando /auth
+// Bloque de prueba para /auth
 bot.command('auth', async (ctx) => {
-  const chatId = ctx.chat.id;
-  if (!['group','supergroup'].includes(ctx.chat.type)) return;
+  console.log("📩 Comando /auth recibido en grupo:", ctx.chat.id, ctx.chat.title);
 
-  const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
-  if (!esAdmin) {
-    const msg = await ctx.reply("❌ Solo administradores pueden usar este comando.");
-    borrarMensaje(ctx, msg);
-    return;
-  }
-
-  if (!ctx.args || ctx.args.length === 0) {
-    const msg = await ctx.reply("❌ Uso: `/auth contraseña`", { parse_mode: 'Markdown' });
-    borrarMensaje(ctx, msg);
-    return;
-  }
-
-  const passwordIngresado = ctx.args.join(' ');
-  if (passwordIngresado === BOT_PASSWORD) {
-    gruposAutorizados.add(chatId);
-    registrarGrupo(chatId, ctx.chat.title);
-    const msg = await ctx.reply("✅ Grupo autorizado correctamente.");
-    borrarMensaje(ctx, msg);
-  } else {
-    const msg = await ctx.reply("❌ Contraseña incorrecta.");
-    borrarMensaje(ctx, msg);
-  }
+  const msg = await ctx.reply("✅ El bot recibió el comando /auth");
+  // No borramos el mensaje para que lo veas
 });
 // Comando /delgrupo <id>
 bot.command('delgrupo', async (ctx) => {
