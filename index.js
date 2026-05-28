@@ -228,14 +228,14 @@ async function aplicarCastigo(ctx, userId, tipo, duracionSegundos, motivo) {
       await ctx.telegram.unbanChatMember(ctx.chat.id, userId);
       return ctx.reply(`👢 Usuario expulsado. Motivo: ${motivo}`);
     }
-    if (tipo === 'warn') {
+      if (tipo === 'warn') {
       return ctx.reply(`⚠️ Usuario advertido. Motivo: ${motivo}`);
     }
   } catch (err) {
     console.error("Error en aplicarCastigo:", err);
     return ctx.reply("❌ Error al aplicar el castigo.");
   }
-}
+}   // ← cierre correcto de aplicarCastigo
 
 function convertirIntervalo(valor, unidad) {
   switch (unidad) {
