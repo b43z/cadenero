@@ -92,13 +92,13 @@ bot.use((ctx, next) => {
   return next();
 });
 
-// Comando /start
+// Comando /start (versión de prueba)
 bot.start(async (ctx) => {
   registrarGrupo(ctx.chat.id, ctx.chat.title);
   const msg = await ctx.reply("⚡ Bot activado. Evaluará automáticamente a los nuevos usuarios.");
-  borrarMensaje(ctx, msg);
+  console.log("Mensaje enviado con ID:", msg.message_id);
+  // 🔴 Aquí NO llamamos a borrarMensaje, para verificar que se muestra
 });
-
 // Comando /grupos
 bot.command('grupos', async (ctx) => {
   if (gruposActivos.size === 0) {
