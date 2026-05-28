@@ -14,6 +14,9 @@ const gruposAutorizados = new Set(
 const gruposPendientes = new Map();
 const intentosFallidos = new Map();
 
+// Tiempo configurable para borrar mensajes (ms)
+const TIEMPO_BORRADO_MS = 300000; // 5 minutos (cambia aquí)
+
 // Validaciones de nombres
 const VALIDACIONES = {
   soloSimbolos: /^[\p{P}\p{S}]+$/u,
@@ -27,51 +30,27 @@ function nombreInvalido(nombre) {
     VALIDACIONES.soloSimbolos.test(nombre) ||
     VALIDACIONES.unaLetra.test(nombre) ||
     VALIDACIONES.soloEmoji.test(nombre) ||
-    VALIDACIONES.letrasRepetidas.test(nombre) // ahora solo detecta 3+ repeticiones
+    VALIDACIONES.letrasRepetidas.test(nombre)
   );
 }
 
-// Utilidades
-const timeoutMap = new Map();
-function limpiarUsuarioProcesado(userId) {
-  if (timeoutMap.has(userId)) clearTimeout(timeoutMap.get(userId));
-  const timeout = setTimeout(() => {
-    usuariosProcesados.delete(userId);
-    timeoutMap.delete(userId);
-  }, 30000);
-  timeoutMap.set(userId, timeout);
-}
-
-function registrarGrupo(chatId, chatTitle) {
-  if (!gruposActivos.has(chatId)) {
-    gruposActivos.set(chatId, {
-      nombre: chatTitle || `Grupo ${chatId}`,
-      usuariosProcesados: 0,
-      usuariosRechazados: 0,
-      fechaInicio: new Date(),
-      id: chatId
-    });
-    console.log(`📍 Grupo registrado: ${chatTitle} (${chatId})`);
-  }
-}
-
-function actualizarGrupo(chatId, aprobado = true) {
-  if (gruposActivos.has(chatId)) {
-    const grupo = gruposActivos.get(chatId);
-    grupo.usuariosProcesados++;
-    if (!aprobado) grupo.usuariosRechazados++;
-  }
-}
-
-async function esAdminDelGrupo(ctx, userId) {
+// Utilidad para borrar mensajes después de TIEMPO_BORRADO_MS
+async function borrarMensaje(ctx, message) {
   try {
-    const miembro = await ctx.telegram.getChatMember(ctx.chat.id, userId);
-    return miembro.status === 'administrator' || miembro.status === 'creator';
-  } catch {
-    return false;
+    setTimeout(async () => {
+      try {
+        await ctx.deleteMessage(message.message_id);
+        console.log(`🗑️ Mensaje eliminado automáticamente: ${message.message_id}`);
+      } catch (err) {
+        console.error(`Error al eliminar mensaje ${message.message_id}:`, err.message);
+      }
+    }, TIEMPO_BORRADO_MS);
+  } catch (err) {
+    console.error("Error al programar borrado:", err.message);
   }
 }
 
+// Función procesarUsuario con borrado automático
 async function procesarUsuario(ctx, user, tipo = 'directo') {
   const userId = user.id;
   const chatId = ctx.chat.id;
@@ -89,15 +68,18 @@ async function procesarUsuario(ctx, user, tipo = 'directo') {
     if (!esValido) {
       if (tipo === 'solicitud') await ctx.telegram.declineChatJoinRequest(ctx.chat.id, userId);
       else await ctx.telegram.banChatMember(ctx.chat.id, userId);
-      ctx.reply(`🚫 Usuario rechazado: ${nombre} ${username}`);
+      const msg = await ctx.reply(`🚫 Usuario rechazado: ${nombre} ${username}`);
+      borrarMensaje(ctx, msg);
       actualizarGrupo(chatId, false);
     } else {
       if (tipo === 'solicitud') await ctx.telegram.approveChatJoinRequest(ctx.chat.id, userId);
-      ctx.reply(`✅ Bienvenido ${nombre} ${username}`);
+      const msg = await ctx.reply(`✅ Bienvenido ${nombre} ${username}`);
+      borrarMensaje(ctx, msg);
       actualizarGrupo(chatId, true);
     }
   } catch (err) {
-    ctx.reply(`❌ Error al procesar ${nombre}: ${err.message}`);
+    const msg = await ctx.reply(`❌ Error al procesar ${nombre}: ${err.message}`);
+    borrarMensaje(ctx, msg);
   }
 }
 
@@ -111,15 +93,17 @@ bot.use((ctx, next) => {
 });
 
 // Comando /start
-bot.start((ctx) => {
+bot.start(async (ctx) => {
   registrarGrupo(ctx.chat.id, ctx.chat.title);
-  ctx.reply("⚡ Bot activado. Evaluará automáticamente a los nuevos usuarios.");
+  const msg = await ctx.reply("⚡ Bot activado. Evaluará automáticamente a los nuevos usuarios.");
+  borrarMensaje(ctx, msg);
 });
 
 // Comando /grupos
-bot.command('grupos', (ctx) => {
+bot.command('grupos', async (ctx) => {
   if (gruposActivos.size === 0) {
-    ctx.reply("📭 El bot no está activo en ningún grupo aún.");
+    const msg = await ctx.reply("📭 El bot no está activo en ningún grupo aún.");
+    borrarMensaje(ctx, msg);
     return;
   }
   let mensaje = "📊 **Grupos Activos del Bot**\n\n";
@@ -135,9 +119,9 @@ bot.command('grupos', (ctx) => {
     mensaje += `   • Tiempo activo: ${tiempoActivo} min\n\n`;
     contador++;
   });
-  ctx.reply(mensaje, { parse_mode: 'Markdown' });
+  const msg = await ctx.reply(mensaje, { parse_mode: 'Markdown' });
+  borrarMensaje(ctx, msg);
 });
-
 // Comando /auth
 bot.command('auth', async (ctx) => {
   const chatId = ctx.chat.id;
@@ -145,11 +129,13 @@ bot.command('auth', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) return;
   if (gruposAutorizados.has(chatId)) {
-    ctx.reply("✅ Este grupo ya está autorizado.");
+    const msg = await ctx.reply("✅ Este grupo ya está autorizado.");
+    borrarMensaje(ctx, msg);
     return;
   }
   if (!ctx.args || ctx.args.length === 0) {
-    ctx.reply("❌ Uso: `/auth contraseña`", { parse_mode: 'Markdown' });
+    const msg = await ctx.reply("❌ Uso: `/auth contraseña`", { parse_mode: 'Markdown' });
+    borrarMensaje(ctx, msg);
     return;
   }
   const passwordIngresado = ctx.args.join(' ');
@@ -158,10 +144,11 @@ bot.command('auth', async (ctx) => {
     registrarGrupo(chatId, ctx.chat.title);
     gruposPendientes.delete(chatId);
     intentosFallidos.delete(chatId);
-    ctx.reply("✅ Grupo autorizado correctamente.");
-    console.log(`🔑 Grupo autorizado: ${ctx.chat.title} (${chatId})`);
+    const msg = await ctx.reply("✅ Grupo autorizado correctamente.");
+    borrarMensaje(ctx, msg);
   } else {
-    ctx.reply("❌ Contraseña incorrecta.");
+    const msg = await ctx.reply("❌ Contraseña incorrecta.");
+    borrarMensaje(ctx, msg);
   }
 });
 
@@ -169,11 +156,13 @@ bot.command('auth', async (ctx) => {
 bot.command('delgrupo', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) {
-    ctx.reply("❌ Solo administradores pueden usar este comando.");
+    const msg = await ctx.reply("❌ Solo administradores pueden usar este comando.");
+    borrarMensaje(ctx, msg);
     return;
   }
   if (!ctx.args || ctx.args.length === 0) {
-    ctx.reply("❌ Uso: `/delgrupo <id>`", { parse_mode: 'Markdown' });
+    const msg = await ctx.reply("❌ Uso: `/delgrupo <id>`", { parse_mode: 'Markdown' });
+    borrarMensaje(ctx, msg);
     return;
   }
   const idEliminar = parseInt(ctx.args[0]);
@@ -182,63 +171,20 @@ bot.command('delgrupo', async (ctx) => {
     gruposAutorizados.delete(idEliminar);
     gruposPendientes.delete(idEliminar);
     intentosFallidos.delete(idEliminar);
-    ctx.reply(`🗑️ Grupo eliminado: ${idEliminar}`);
-    console.log(`🗑️ Grupo eliminado manualmente: ${idEliminar}`);
+    const msg = await ctx.reply(`🗑️ Grupo eliminado: ${idEliminar}`);
+    borrarMensaje(ctx, msg);
   } else {
-    ctx.reply("⚠️ Ese grupo no está registrado.");
+    const msg = await ctx.reply("⚠️ Ese grupo no está registrado.");
+    borrarMensaje(ctx, msg);
   }
 });
 
-// Limpieza automática de grupos pendientes
-setInterval(async () => {
-  const ahora = new Date();
-  for (const [chatId, info] of gruposPendientes.entries()) {
-    const minutosPendiente = (ahora - info.fecha_solicitud) / 1000 / 60;
-    if (minutosPendiente > 10) {
-      try {
-        await bot.telegram.leaveChat(chatId);
-        gruposPendientes.delete(chatId);
-        gruposActivos.delete(chatId);
-        intentosFallidos.delete(chatId);
-        console.log(`⏱️ Grupo eliminado automáticamente por no autorizarse: ${chatId}`);
-      } catch (err) {
-        console.error(`Error al salir del grupo ${chatId}:`, err.message);
-      }
-    }
-  }
-}, 60000);
 // Eventos
-bot.on('my_chat_member', async (ctx) => {
-  const chatId = ctx.chat.id;
-  const nuevoEstado = ctx.myChatMember.new_chat_member.status;
-  const estadoAnterior = ctx.myChatMember.old_chat_member.status;
-
-  if ((estadoAnterior === 'left' || estadoAnterior === 'kicked' || !estadoAnterior) &&
-      (['member','administrator','creator'].includes(nuevoEstado))) {
-    if (gruposAutorizados.has(chatId)) {
-      registrarGrupo(chatId, ctx.chat.title);
-      console.log(`✅ Grupo ya autorizado: ${ctx.chat.title} (${chatId})`);
-    } else {
-      registrarGrupo(chatId, ctx.chat.title);
-      gruposPendientes.set(chatId, {
-        nombre: ctx.chat.title,
-        fecha_solicitud: new Date()
-      });
-      ctx.reply("🔐 Este grupo requiere autenticación. Usa: `/auth contraseña`");
-    }
-  }
-  if (nuevoEstado === 'left' || nuevoEstado === 'kicked') {
-    gruposActivos.delete(chatId);
-    gruposPendientes.delete(chatId);
-    intentosFallidos.delete(chatId);
-    console.log(`🗑️ Bot eliminado del grupo: ${chatId}`);
-  }
-});
-
 bot.on('new_chat_members', async (ctx) => {
   const chatId = ctx.chat.id;
   if (!gruposAutorizados.has(chatId)) {
-    ctx.reply("⚠️ Este grupo aún no está autorizado. Usa `/auth contraseña`.");
+    const msg = await ctx.reply("⚠️ Este grupo aún no está autorizado. Usa `/auth contraseña`.");
+    borrarMensaje(ctx, msg);
     return;
   }
   for (const user of ctx.message.new_chat_members) {
@@ -249,7 +195,8 @@ bot.on('new_chat_members', async (ctx) => {
 bot.on('chat_join_request', async (ctx) => {
   const chatId = ctx.chat.id;
   if (!gruposAutorizados.has(chatId)) {
-    ctx.reply("⚠️ Este grupo aún no está autorizado. Usa `/auth contraseña`.");
+    const msg = await ctx.reply("⚠️ Este grupo aún no está autorizado. Usa `/auth contraseña`.");
+    borrarMensaje(ctx, msg);
     return;
   }
   const user = ctx.chatJoinRequest.from;
