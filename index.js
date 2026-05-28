@@ -220,7 +220,14 @@ async function obtenerUserId(ctx) {
 async function aplicarCastigo(ctx, userId, tipo, duracionSegundos, motivo) {
   try {
     if (tipo === 'ban') {
-      await ctx.telegram.banChatMember(ctx.chat.id, userId, { until_date: Math.floor(Date.now() / 
+      await ctx.telegram.banChatMember(ctx.chat.id, userId, { until_date: Math.floor(Date.now() / 1000) + duracionSegundos });
+      return ctx.reply(`🚫 Usuario baneado por ${Math.floor(duracionSegundos / 86400)} días. Motivo: ${motivo}`);
+    }
+    if (tipo === 'mute') {
+      await ctx.telegram.restrictChatMember(ctx.chat.id, userId, {
+        permissions: { can_send_messages: false, can_send_media_messages: false, can_send_other_messages: false },
+        until_date: Math.floor(Date.now() / 1000) + duracionSegundos
+      });
       return ctx.reply(`🔇 Usuario muteado por ${Math.floor(duracionSegundos / 3600)} horas. Motivo: ${motivo}`);
     }
     if (tipo === 'kick') {
@@ -228,15 +235,14 @@ async function aplicarCastigo(ctx, userId, tipo, duracionSegundos, motivo) {
       await ctx.telegram.unbanChatMember(ctx.chat.id, userId);
       return ctx.reply(`👢 Usuario expulsado. Motivo: ${motivo}`);
     }
-      if (tipo === 'warn') {
+    if (tipo === 'warn') {
       return ctx.reply(`⚠️ Usuario advertido. Motivo: ${motivo}`);
     }
   } catch (err) {
     console.error("Error en aplicarCastigo:", err);
     return ctx.reply("❌ Error al aplicar el castigo.");
   }
-}   // ← cierre correcto de aplicarCastigo
-
+} // ← ESTA llave faltaba
 function convertirIntervalo(valor, unidad) {
   switch (unidad) {
     case 's': return valor;
