@@ -132,17 +132,18 @@ bot.command('auth', async (ctx) => {
     return;
   }
 
-  if (!ctx.args || ctx.args.length === 0) {
+  // Extraer contraseña desde el texto del mensaje
+  const partes = ctx.message.text.split(" ");
+  if (partes.length < 2) {
     const msg = await ctx.reply("❌ Uso: `/auth contraseña`", { parse_mode: 'Markdown' });
     borrarMensaje(ctx, msg);
     return;
   }
 
-  const passwordIngresado = ctx.args.join(' ');
+  const passwordIngresado = partes.slice(1).join(" ");
   if (passwordIngresado === BOT_PASSWORD) {
     gruposAutorizados.add(chatId);
 
-    // 🔧 Registrar grupo en activos inmediatamente
     gruposActivos.set(chatId, {
       nombre: ctx.chat.title,
       usuariosProcesados: 0,
