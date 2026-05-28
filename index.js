@@ -196,6 +196,7 @@ bot.command('delgrupo', async (ctx) => {
     borrarMensaje(ctx, msg);
   }
 });
+
 // Evento my_chat_member corregido
 bot.on('my_chat_member', async (ctx) => {
   const chatId = ctx.chat.id;
