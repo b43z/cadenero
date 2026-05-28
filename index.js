@@ -12,8 +12,23 @@ const gruposAutorizados = new Set(
     .map(id => parseInt(id))
 );
 
-// === Comando /start ===
+// === Comando /start (privado y grupos) ===
 bot.start((ctx) => {
+  if (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup') {
+    gruposActivos.set(ctx.chat.id, {
+      nombre: ctx.chat.title,
+      usuariosProcesados: 0,
+      usuariosRechazados: 0,
+      autorizado: gruposAutorizados.has(ctx.chat.id)
+    });
+    ctx.reply("⚡ Bot activado en este grupo. Evaluará automáticamente a los nuevos usuarios.");
+  } else {
+    ctx.reply("⚡ El Cadenero está en funciones. Usa /menu para ver opciones.");
+  }
+});
+
+// Handler explícito para /start en grupos
+bot.command('start', (ctx) => {
   if (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup') {
     gruposActivos.set(ctx.chat.id, {
       nombre: ctx.chat.title,
@@ -182,8 +197,6 @@ bot.on('callback_query', async (ctx) => {
     }
   }
 
-  // Aquí mantienes la lógica de configuración (set_warns, set_ban, etc.)
-
   await bot.telegram.sendMessage(chatId, respuesta, { 
     parse_mode: "MarkdownV2", 
     reply_markup: tecladoExtra || undefined 
@@ -207,15 +220,8 @@ async function obtenerUserId(ctx) {
 async function aplicarCastigo(ctx, userId, tipo, duracionSegundos, motivo) {
   try {
     if (tipo === 'ban') {
-      await ctx.telegram.banChatMember(ctx.chat.id, userId, { until_date: Math.floor(Date.now() / 1000) + duracionSegundos });
-      return ctx.reply(`🚫 Usuario baneado por ${Math.floor(duracionSegundos / 86400)} días. Motivo: ${motivo}`);
-    }
-    if (tipo === 'mute') {
-      await ctx.telegram.restrictChatMember(ctx.chat.id, userId, {
-        permissions: { can_send_messages: false, can_send_media_messages: false, can_send_other_messages: false },
-        until_date: Math.floor(Date.now() / 1000) + duracionSegundos
-      });
-            return ctx.reply(`🔇 Usuario muteado por ${Math.floor(duracionSegundos / 3600)} horas. Motivo: ${motivo}`);
+      await ctx.telegram.banChatMember(ctx.chat.id, userId, { until_date: Math.floor(Date.now() / 
+      return ctx.reply(`🔇 Usuario muteado por ${Math.floor(duracionSegundos / 3600)} horas. Motivo: ${motivo}`);
     }
     if (tipo === 'kick') {
       await ctx.telegram.banChatMember(ctx.chat.id, userId);
