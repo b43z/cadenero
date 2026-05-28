@@ -243,8 +243,8 @@ async function aplicarCastigo(ctx, userId, tipo, duracionSegundos, motivo) {
     console.error("Error en aplicarCastigo:", err);
     return ctx.reply("❌ Error al aplicar el castigo.");
   }
+ }
 }
-
 function convertirIntervalo(valor, unidad) {
   switch (unidad) {
     case 's': return valor;
