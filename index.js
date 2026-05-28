@@ -105,24 +105,17 @@ bot.command('start', async (ctx) => {
 // Comando /grupos
 bot.command('grupos', async (ctx) => {
   if (gruposActivos.size === 0) {
-    const msg = await ctx.reply("📭 El bot no está activo en ningún grupo aún.");
+    const msg = await ctx.reply("📭 No hay grupos activos autorizados.");
     borrarMensaje(ctx, msg);
     return;
   }
-  let mensaje = "📊 **Grupos Activos del Bot**\n\n";
-  let contador = 1;
-  gruposActivos.forEach((info, chatId) => {
-    const tiempoActivo = Math.floor((new Date() - info.fechaInicio) / 1000 / 60);
-    const estado = gruposAutorizados.has(chatId) ? "✅ Autorizado" : "⚠️ Pendiente";
-    mensaje += `${contador}. **${info.nombre}**\n`;
-    mensaje += `   • ID: \`${chatId}\`\n`;
-    mensaje += `   • Estado: ${estado}\n`;
-    mensaje += `   • Usuarios procesados: ${info.usuariosProcesados}\n`;
-    mensaje += `   • Usuarios rechazados: ${info.usuariosRechazados}\n`;
-    mensaje += `   • Tiempo activo: ${tiempoActivo} min\n\n`;
-    contador++;
+
+  let texto = "📌 Grupos activos:\n\n";
+  gruposActivos.forEach((info) => {
+    texto += `• ${info.nombre} (ID: ${info.id})\n   Usuarios procesados: ${info.usuariosProcesados}\n   Usuarios rechazados: ${info.usuariosRechazados}\n   Inicio: ${info.fechaInicio.toLocaleString()}\n\n`;
   });
-  const msg = await ctx.reply(mensaje, { parse_mode: 'Markdown' });
+
+  const msg = await ctx.reply(texto);
   borrarMensaje(ctx, msg);
 });
 // Comando /auth
@@ -149,7 +142,7 @@ bot.command('auth', async (ctx) => {
   if (passwordIngresado === BOT_PASSWORD) {
     gruposAutorizados.add(chatId);
 
-    // Registrar grupo en activos
+    // 🔧 Registrar grupo en activos inmediatamente
     gruposActivos.set(chatId, {
       nombre: ctx.chat.title,
       usuariosProcesados: 0,
