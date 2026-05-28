@@ -4,8 +4,8 @@
  "description": "Bot de Telegram con Telegraf para ban automático según reglas de nombre",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-    "start": "node index.js"
+  "test": "echo \"Error: no test specified\" && exit 1",
+  "start": "node index.js"
   },
   "keywords": [],
   "author": "B43z",
