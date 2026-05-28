@@ -178,10 +178,7 @@ bot.command('menu', async (ctx) => {
 bot.on('callback_query', async (ctx) => {
   const data = ctx.callbackQuery.data;
   const chatId = ctx.chat.id;
-  const config = obtenerConfig(chatId);
-
   let respuesta = "";
-  let tecladoExtra = null;
 
   if (data === "cmd_start") {
     respuesta = "⚡ Usa el comando /start directamente en el grupo para activar el bot.";
@@ -196,14 +193,18 @@ bot.on('callback_query', async (ctx) => {
       });
     }
   }
+  if (data === "cmd_auth") {
+    respuesta = "🔑 Usa /auth <password> para autorizar este grupo.";
+  }
+  if (data === "cmd_delgrupo") {
+    respuesta = "🗑️ Usa /delgrupo para eliminar este grupo de la lista de activos.";
+  }
+  if (data === "cmd_config") {
+    respuesta = "⚙️ Panel de configuración. Aquí podrás ajustar warns y duración de baneos.";
+  }
 
-  await bot.telegram.sendMessage(chatId, respuesta, { 
-    parse_mode: "MarkdownV2", 
-    reply_markup: tecladoExtra || undefined 
-  });
-  await bot.answerCallbackQuery(ctx.callbackQuery.id);
-});
-
+  await ctx.telegram.sendMessage(chatId, respuesta, { parse_mode: "MarkdownV2" });
+  await ctx.answerCallbackQuery(ctx.callbackQuery.id);
 // === Funciones auxiliares necesarias ===
 async function obtenerUserId(ctx) {
   if (ctx.message.reply_to_message) {
@@ -242,7 +243,8 @@ async function aplicarCastigo(ctx, userId, tipo, duracionSegundos, motivo) {
     console.error("Error en aplicarCastigo:", err);
     return ctx.reply("❌ Error al aplicar el castigo.");
   }
-} // ← ESTA llave faltaba
+}
+
 function convertirIntervalo(valor, unidad) {
   switch (unidad) {
     case 's': return valor;
