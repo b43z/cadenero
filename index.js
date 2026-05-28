@@ -27,21 +27,6 @@ bot.start((ctx) => {
   }
 });
 
-// Handler explícito para /start en grupos
-bot.command('start', (ctx) => {
-  if (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup') {
-    gruposActivos.set(ctx.chat.id, {
-      nombre: ctx.chat.title,
-      usuariosProcesados: 0,
-      usuariosRechazados: 0,
-      autorizado: gruposAutorizados.has(ctx.chat.id)
-    });
-    ctx.reply("⚡ Bot activado en este grupo. Evaluará automáticamente a los nuevos usuarios.");
-  } else {
-    ctx.reply("⚡ El Cadenero está en funciones. Usa /menu para ver opciones.");
-  }
-});
-
 // Middleware para habilitar ctx.args
 bot.use((ctx, next) => {
   if (ctx.message && ctx.message.text) {
@@ -90,149 +75,7 @@ async function esAdminDelGrupo(ctx, userId) {
   }
 }
 
-// === Ejecutar castigo solo si es admin ===
-async function ejecutarCastigo(ctx, tipo, duracionSegundos = 0, motivo = "No especificado") {
-  const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
-  if (!esAdmin) {
-    return ctx.reply("❌ Este comando es exclusivo para administradores.");
-  }
-  const userId = await obtenerUserId(ctx);
-  if (!userId) return ctx.reply("⚠️ Debes responder al mensaje o indicar un usuario válido.");
-  await aplicarCastigo(ctx, userId, tipo, duracionSegundos, motivo);
-}
-
-// === Comandos de castigo ===
-bot.command('ban', async (ctx) => {
-  const motivo = ctx.args.join(" ") || "No especificado";
-  const config = obtenerConfig(ctx.chat.id);
-  if (!ctx.message.reply_to_message && ctx.args.length === 0) {
-    return ctx.reply("⚠️ Debes responder a un mensaje o indicar un usuario.");
-  }
-  await ejecutarCastigo(ctx, 'ban', config.banDuration / 1000, motivo);
-});
-bot.command('mute', async (ctx) => {
-  const [valor, unidad, ...motivoArr] = ctx.args;
-  if (!valor || isNaN(valor)) {
-    return ctx.reply("⚠️ Debes indicar un número válido y unidad (s/m/h/d).");
-  }
-  const motivo = motivoArr.join(" ") || "No especificado";
-  await ejecutarCastigo(ctx, 'mute', convertirIntervalo(parseInt(valor), unidad), motivo);
-});
-bot.command('kick', async (ctx) => {
-  const motivo = ctx.args.join(" ") || "No especificado";
-  await ejecutarCastigo(ctx, 'kick', 0, motivo);
-});
-bot.command('warn', async (ctx) => {
-  const motivo = ctx.args.join(" ") || "No especificado";
-  await ejecutarCastigo(ctx, 'warn', 0, motivo);
-});
-
-// === Comando /grupos ===
-bot.command('grupos', (ctx) => {
-  if (gruposActivos.size === 0) {
-    return ctx.reply("📭 El bot no está activo en ningún grupo aún.");
-  }
-  let salida = "📊 *Grupos activos:*\n\n";
-  gruposActivos.forEach((grupo, id) => {
-    salida += `• ${grupo.nombre} (ID: ${id})\n   Estado: ${grupo.autorizado ? "✅ Autorizado" : "⚠️ Pendiente"}\n   Procesados: ${grupo.usuariosProcesados}\n   Rechazados: ${grupo.usuariosRechazados}\n\n`;
-  });
-  ctx.reply(salida, { parse_mode: "MarkdownV2" });
-});
-
-// === Comando /stats ===
-bot.command('stats', (ctx) => {
-  if (gruposActivos.size === 0) {
-    return ctx.reply("📭 No hay estadísticas porque el bot no está activo en ningún grupo.");
-  }
-  let salida = "📈 *Estadísticas del bot:*\n\n";
-  gruposActivos.forEach((grupo, id) => {
-    salida += `• ${grupo.nombre} (ID: ${id})\n`;
-    salida += `   Procesados: ${grupo.usuariosProcesados}\n`;
-    salida += `   Rechazados: ${grupo.usuariosRechazados}\n`;
-    salida += `   Estado: ${grupo.autorizado ? "✅ Autorizado" : "⚠️ Pendiente"}\n\n`;
-  });
-  ctx.reply(salida, { parse_mode: "MarkdownV2" });
-});
-
-// === Comando /menu ===
-bot.command('menu', async (ctx) => {
-  const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
-  const tecladoBase = [
-    [
-      { text: "⚡ /start", callback_data: "cmd_start" },
-      { text: "📊 /grupos", callback_data: "cmd_grupos" }
-    ],
-    [
-      { text: "📈 /stats", callback_data: "cmd_stats" },
-      { text: "🔑 /auth", callback_data: "cmd_auth" }
-    ],
-    [
-      { text: "🗑️ /delgrupo", callback_data: "cmd_delgrupo" }
-    ]
-  ];
-  if (esAdmin) {
-    tecladoBase.push([{ text: "⚙️ Configuración", callback_data: "cmd_config" }]);
-  }
-  ctx.reply("📋 *Menú de Comandos del Bot*\n\nSelecciona un comando:", { 
-    parse_mode: "MarkdownV2", 
-    reply_markup: { inline_keyboard: tecladoBase }
-  });
-});
-
-// === Manejo de botones (configuración y menú) ===
-bot.on('callback_query', async (ctx) => {
-  const data = ctx.callbackQuery.data;
-  const chatId = ctx.callbackQuery.message.chat.id; // chat correcto
-  let respuesta = "";
-
-  switch (data) {
-    case "cmd_start":
-      respuesta = "⚡ Usa el comando /start directamente en el grupo para activar el bot.";
-      break;
-
-    case "cmd_grupos":
-      if (gruposActivos.size === 0) {
-        respuesta = "📭 El bot no está activo en ningún grupo aún.";
-      } else {
-        respuesta = "📊 Grupos activos:\n\n";
-        gruposActivos.forEach((grupo, id) => {
-          respuesta += `• ${grupo.nombre} (ID: ${id})\n   Estado: ${grupo.autorizado ? "✅ Autorizado" : "⚠️ Pendiente"}\n   Procesados: ${grupo.usuariosProcesados}\n   Rechazados: ${grupo.usuariosRechazados}\n\n`;
-        });
-      }
-      break;
-
-    case "cmd_stats":
-      if (gruposActivos.size === 0) {
-        respuesta = "📭 No hay estadísticas porque el bot no está activo en ningún grupo.";
-      } else {
-        respuesta = "📈 Estadísticas del bot:\n\n";
-        gruposActivos.forEach((grupo, id) => {
-          respuesta += `• ${grupo.nombre} (ID: ${id})\n   Procesados: ${grupo.usuariosProcesados}\n   Rechazados: ${grupo.usuariosRechazados}\n   Estado: ${grupo.autorizado ? "✅ Autorizado" : "⚠️ Pendiente"}\n\n`;
-        });
-      }
-      break;
-
-    case "cmd_auth":
-      respuesta = "🔑 Usa /auth <password> para autorizar este grupo.";
-      break;
-
-    case "cmd_delgrupo":
-      respuesta = "🗑️ Usa /delgrupo para eliminar este grupo de la lista de activos.";
-      break;
-
-    case "cmd_config":
-      respuesta = "⚙️ Panel de configuración. Aquí podrás ajustar warns y duración de baneos.";
-      break;
-  }
-
-  if (respuesta) {
-    await ctx.telegram.sendMessage(chatId, respuesta, { parse_mode: "MarkdownV2" });
-  }
-
-  // Confirma la acción al cliente de Telegram
-  await ctx.answerCallbackQuery();
-});
-// === Funciones auxiliares necesarias ===
+// === Funciones auxiliares ===
 async function obtenerUserId(ctx) {
   if (ctx.message && ctx.message.reply_to_message) {
     return ctx.message.reply_to_message.from.id;
@@ -281,6 +124,99 @@ function convertirIntervalo(valor, unidad) {
     default: return valor;
   }
 }
+
+// === Comandos principales ===
+bot.command('grupos', (ctx) => {
+  if (gruposActivos.size === 0) {
+    return ctx.reply("📭 El bot no está activo en ningún grupo aún.");
+  }
+  let salida = "📊 *Grupos activos:*\n\n";
+  gruposActivos.forEach((grupo, id) => {
+    salida += `• ${grupo.nombre} (ID: ${id})\n   Estado: ${grupo.autorizado ? "✅ Autorizado" : "⚠️ Pendiente"}\n   Procesados: ${grupo.usuariosProcesados}\n   Rechazados: ${grupo.usuariosRechazados}\n\n`;
+  });
+  ctx.reply(salida, { parse_mode: "MarkdownV2" });
+});
+
+bot.command('stats', (ctx) => {
+  if (gruposActivos.size === 0) {
+    return ctx.reply("📭 No hay estadísticas porque el bot no está activo en ningún grupo.");
+  }
+  let salida = "📈 *Estadísticas del bot:*\n\n";
+  gruposActivos.forEach((grupo, id) => {
+    salida += `• ${grupo.nombre} (ID: ${id})\n   Procesados: ${grupo.usuariosProcesados}\n   Rechazados: ${grupo.usuariosRechazados}\n   Estado: ${grupo.autorizado ? "✅ Autorizado" : "⚠️ Pendiente"}\n\n`;
+  });
+  ctx.reply(salida, { parse_mode: "MarkdownV2" });
+});
+
+bot.command('menu', async (ctx) => {
+  const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
+  const tecladoBase = [
+    [
+      { text: "⚡ /start", callback_data: "cmd_start" },
+      { text: "📊 /grupos", callback_data: "cmd_grupos" }
+    ],
+    [
+      { text: "📈 /stats", callback_data: "cmd_stats" },
+      { text: "🔑 /auth", callback_data: "cmd_auth" }
+    ],
+    [
+      { text: "🗑️ /delgrupo", callback_data: "cmd_delgrupo" }
+    ]
+  ];
+  if (esAdmin) {
+    tecladoBase.push([{ text: "⚙️ Configuración", callback_data: "cmd_config" }]);
+  }
+  ctx.reply("📋 *Menú de Comandos del Bot*\n\nSelecciona un comando:", { 
+    parse_mode: "MarkdownV2", 
+    reply_markup: { inline_keyboard: tecladoBase }
+  });
+});
+// === Acciones de botones inline ===
+bot.action('cmd_start', async (ctx) => {
+  await ctx.reply("⚡ Usa el comando /start directamente en el grupo para activar el bot.");
+  await ctx.answerCallbackQuery();
+});
+
+bot.action('cmd_grupos', async (ctx) => {
+  if (gruposActivos.size === 0) {
+    await ctx.reply("📭 El bot no está activo en ningún grupo aún.");
+  } else {
+    let salida = "📊 Grupos activos:\n\n";
+    gruposActivos.forEach((grupo, id) => {
+      salida += `• ${grupo.nombre} (ID: ${id})\n   Estado: ${grupo.autorizado ? "✅ Autorizado" : "⚠️ Pendiente"}\n   Procesados: ${grupo.usuariosProcesados}\n   Rechazados: ${grupo.usuariosRechazados}\n\n`;
+    });
+    await ctx.reply(salida, { parse_mode: "MarkdownV2" });
+  }
+  await ctx.answerCallbackQuery();
+});
+
+bot.action('cmd_stats', async (ctx) => {
+  if (gruposActivos.size === 0) {
+    await ctx.reply("📭 No hay estadísticas porque el bot no está activo en ningún grupo.");
+  } else {
+    let salida = "📈 Estadísticas del bot:\n\n";
+    gruposActivos.forEach((grupo, id) => {
+      salida += `• ${grupo.nombre} (ID: ${id})\n   Procesados: ${grupo.usuariosProcesados}\n   Rechazados: ${grupo.usuariosRechazados}\n   Estado: ${grupo.autorizado ? "✅ Autorizado" : "⚠️ Pendiente"}\n\n`;
+    });
+    await ctx.reply(salida, { parse_mode: "MarkdownV2" });
+  }
+  await ctx.answerCallbackQuery();
+});
+
+bot.action('cmd_auth', async (ctx) => {
+  await ctx.reply("🔑 Usa /auth <password> para autorizar este grupo.");
+  await ctx.answerCallbackQuery();
+});
+
+bot.action('cmd_delgrupo', async (ctx) => {
+  await ctx.reply("🗑️ Usa /delgrupo para eliminar este grupo de la lista de activos.");
+  await ctx.answerCallbackQuery();
+});
+
+bot.action('cmd_config', async (ctx) => {
+  await ctx.reply("⚙️ Panel de configuración. Aquí podrás ajustar warns y duración de baneos.");
+  await ctx.answerCallbackQuery();
+});
 
 // === Lanzar bot en Railway ===
 bot.launch()
