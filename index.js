@@ -131,30 +131,37 @@ bot.command('auth', async (ctx) => {
   if (!['group','supergroup'].includes(ctx.chat.type)) return;
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) return;
+
   if (gruposAutorizados.has(chatId)) {
     const msg = await ctx.reply("✅ Este grupo ya está autorizado.");
     borrarMensaje(ctx, msg);
     return;
   }
+
   if (!ctx.args || ctx.args.length === 0) {
     const msg = await ctx.reply("❌ Uso: `/auth contraseña`", { parse_mode: 'Markdown' });
     borrarMensaje(ctx, msg);
     return;
   }
+
   const passwordIngresado = ctx.args.join(' ');
   if (passwordIngresado === BOT_PASSWORD) {
     gruposAutorizados.add(chatId);
+
+    // 🔧 Registrar el grupo al autorizar
     registrarGrupo(chatId, ctx.chat.title);
+
     gruposPendientes.delete(chatId);
     intentosFallidos.delete(chatId);
+
     const msg = await ctx.reply("✅ Grupo autorizado correctamente.");
     borrarMensaje(ctx, msg);
+    console.log(`🔑 Grupo autorizado: ${ctx.chat.title} (${chatId})`);
   } else {
     const msg = await ctx.reply("❌ Contraseña incorrecta.");
     borrarMensaje(ctx, msg);
   }
 });
-
 // Comando /delgrupo <id>
 bot.command('delgrupo', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
