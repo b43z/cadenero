@@ -205,6 +205,7 @@ bot.on('callback_query', async (ctx) => {
 
   await ctx.telegram.sendMessage(chatId, respuesta, { parse_mode: "MarkdownV2" });
   await ctx.answerCallbackQuery(ctx.callbackQuery.id);
+});
 // === Funciones auxiliares necesarias ===
 async function obtenerUserId(ctx) {
   if (ctx.message.reply_to_message) {
@@ -243,7 +244,8 @@ async function aplicarCastigo(ctx, userId, tipo, duracionSegundos, motivo) {
     console.error("Error en aplicarCastigo:", err);
     return ctx.reply("❌ Error al aplicar el castigo.");
   }
- }
+}
+
 function convertirIntervalo(valor, unidad) {
   switch (unidad) {
     case 's': return valor;
