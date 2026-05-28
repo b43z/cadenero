@@ -169,7 +169,6 @@ bot.command('auth', async (ctx) => {
     borrarMensaje(ctx, msg);
   }
 });
-});
 // Comando /delgrupo <id>
 bot.command('delgrupo', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
