@@ -3,8 +3,28 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 const BOT_PASSWORD = process.env.BOT_PASSWORD || 'b43z6028-cirrus';
 const fs = require('fs');
 
+// === Registro de grupos activos ===
+const gruposActivos = new Map();
+const gruposAutorizados = new Set(
+  (process.env.AUTHORIZED_GROUPS || "")
+    .split(",")
+    .filter(id => id)
+    .map(id => parseInt(id))
+);
+
+// === Comando /start ===
 bot.start((ctx) => {
-  ctx.reply("⚡ El Cadenero está en funciones.");
+  if (ctx.chat.type === 'group' || ctx.chat.type === 'supergroup') {
+    gruposActivos.set(ctx.chat.id, {
+      nombre: ctx.chat.title,
+      usuariosProcesados: 0,
+      usuariosRechazados: 0,
+      autorizado: gruposAutorizados.has(ctx.chat.id)
+    });
+    ctx.reply("⚡ Bot activado en este grupo. Evaluará automáticamente a los nuevos usuarios.");
+  } else {
+    ctx.reply("⚡ El Cadenero está en funciones. Usa /menu para ver opciones.");
+  }
 });
 
 // Middleware para habilitar ctx.args
@@ -19,13 +39,6 @@ bot.use((ctx, next) => {
 // === Configuración persistente en config.json ===
 const CONFIG_FILE = 'config.json';
 const usuariosProcesados = new Set();
-const gruposActivos = new Map();
-const gruposAutorizados = new Set(
-  (process.env.AUTHORIZED_GROUPS || "")
-    .split(",")
-    .filter(id => id)
-    .map(id => parseInt(id))
-);
 const gruposPendientes = new Map();
 const intentosFallidos = new Map();
 
@@ -109,6 +122,18 @@ bot.command('warn', async (ctx) => {
   await ejecutarCastigo(ctx, 'warn', 0, motivo);
 });
 
+// === Comando /grupos ===
+bot.command('grupos', (ctx) => {
+  if (gruposActivos.size === 0) {
+    return ctx.reply("📭 El bot no está activo en ningún grupo aún.");
+  }
+  let salida = "📊 *Grupos activos:*\n\n";
+  gruposActivos.forEach((grupo, id) => {
+    salida += `• ${grupo.nombre} (ID: ${id})\n   Estado: ${grupo.autorizado ? "✅ Autorizado" : "⚠️ Pendiente"}\n   Procesados: ${grupo.usuariosProcesados}\n   Rechazados: ${grupo.usuariosRechazados}\n\n`;
+  });
+  ctx.reply(salida, { parse_mode: "MarkdownV2" });
+});
+
 // === Comando /menu ===
 bot.command('menu', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
@@ -143,7 +168,21 @@ bot.on('callback_query', async (ctx) => {
   let respuesta = "";
   let tecladoExtra = null;
 
-  // ... (mantengo la lógica de configuración igual, solo cambié parse_mode a MarkdownV2 en las respuestas)
+  if (data === "cmd_start") {
+    respuesta = "⚡ Usa el comando /start directamente en el grupo para activar el bot.";
+  }
+  if (data === "cmd_grupos") {
+    if (gruposActivos.size === 0) {
+      respuesta = "📭 El bot no está activo en ningún grupo aún.";
+    } else {
+      respuesta = "📊 Grupos activos:\n\n";
+      gruposActivos.forEach((grupo, id) => {
+        respuesta += `• ${grupo.nombre} (ID: ${id})\n   Estado: ${grupo.autorizado ? "✅ Autorizado" : "⚠️ Pendiente"}\n   Procesados: ${grupo.usuariosProcesados}\n   Rechazados: ${grupo.usuariosRechazados}\n\n`;
+      });
+    }
+  }
+
+  // ... aquí mantienes la lógica de configuración (set_warns, set_ban, etc.)
 
   await bot.telegram.sendMessage(chatId, respuesta, { 
     parse_mode: "MarkdownV2", 
@@ -176,7 +215,7 @@ async function aplicarCastigo(ctx, userId, tipo, duracionSegundos, motivo) {
         permissions: { can_send_messages: false, can_send_media_messages: false, can_send_other_messages: false },
         until_date: Math.floor(Date.now() / 1000) + duracionSegundos
       });
-      return ctx.reply(`🔇 Usuario muteado por ${Math.floor(duracionSegundos / 3600)} horas. Motivo: ${motivo}`);
+ return ctx.reply(`🔇 Usuario muteado por ${Math.floor(duracionSegundos / 3600)} horas. Motivo: ${motivo}`);
     }
     if (tipo === 'kick') {
       await ctx.telegram.banChatMember(ctx.chat.id, userId);
