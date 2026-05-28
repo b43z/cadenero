@@ -178,17 +178,16 @@ bot.command('menu', async (ctx) => {
     reply_markup: { inline_keyboard: tecladoBase }
   });
 });
+
 // === Manejo de botones (configuración y menú) ===
 bot.on('callback_query', async (ctx) => {
   const data = ctx.callbackQuery.data;
-  const chatId = ctx.chat.id;
+  const chatId = ctx.callbackQuery.message.chat.id; // usar el chat del mensaje
   let respuesta = "";
 
   if (data === "cmd_start") {
     respuesta = "⚡ Usa el comando /start directamente en el grupo para activar el bot.";
-  }
-
-  if (data === "cmd_grupos") {
+  } else if (data === "cmd_grupos") {
     if (gruposActivos.size === 0) {
       respuesta = "📭 El bot no está activo en ningún grupo aún.";
     } else {
@@ -197,10 +196,8 @@ bot.on('callback_query', async (ctx) => {
         respuesta += `• ${grupo.nombre} (ID: ${id})\n   Estado: ${grupo.autorizado ? "✅ Autorizado" : "⚠️ Pendiente"}\n   Procesados: ${grupo.usuariosProcesados}\n   Rechazados: ${grupo.usuariosRechazados}\n\n`;
       });
     }
-  }
-
-  if (data === "cmd_stats") {
-    if (gruposActivos.size === 0) {
+  } else if (data === "cmd_stats") {
+  if (gruposActivos.size === 0) {
       respuesta = "📭 No hay estadísticas porque el bot no está activo en ningún grupo.";
     } else {
       respuesta = "📈 Estadísticas del bot:\n\n";
@@ -211,33 +208,29 @@ bot.on('callback_query', async (ctx) => {
         respuesta += `   Estado: ${grupo.autorizado ? "✅ Autorizado" : "⚠️ Pendiente"}\n\n`;
       });
     }
-  }
-
-  if (data === "cmd_auth") {
+  } else if (data === "cmd_auth") {
     respuesta = "🔑 Usa /auth <password> para autorizar este grupo.";
-  }
-
-  if (data === "cmd_delgrupo") {
+  } else if (data === "cmd_delgrupo") {
     respuesta = "🗑️ Usa /delgrupo para eliminar este grupo de la lista de activos.";
-  }
-
-  if (data === "cmd_config") {
+  } else if (data === "cmd_config") {
     respuesta = "⚙️ Panel de configuración. Aquí podrás ajustar warns y duración de baneos.";
   }
 
-  await ctx.telegram.sendMessage(chatId, respuesta, { parse_mode: "MarkdownV2" });
-  await ctx.answerCallbackQuery(ctx.callbackQuery.id);
+  if (respuesta) {
+    await ctx.telegram.sendMessage(chatId, respuesta, { parse_mode: "MarkdownV2" });
+  }
+  await ctx.answerCallbackQuery(); // confirma la acción al cliente de Telegram
 });
 
 // === Funciones auxiliares necesarias ===
 async function obtenerUserId(ctx) {
-  if (ctx.message.reply_to_message) {
+  if (ctx.message && ctx.message.reply_to_message) {
     return ctx.message.reply_to_message.from.id;
   }
   if (ctx.args && ctx.args[0]) {
     const idNum = parseInt(ctx.args[0]);
     if (!isNaN(idNum)) return idNum;
-    return null; // no se soporta username directo
+    return null;
   }
   return null;
 }
