@@ -94,10 +94,13 @@ bot.use((ctx, next) => {
 
 // Comando /start (versión de prueba)
 bot.start(async (ctx) => {
+  const msg = await ctx.reply("⚡ Bot activado en privado.");
+  borrarMensaje(ctx, msg);
+});
+bot.command('start', async (ctx) => {
   registrarGrupo(ctx.chat.id, ctx.chat.title);
-  const msg = await ctx.reply("⚡ Bot activado. Evaluará automáticamente a los nuevos usuarios.");
-  console.log("Mensaje enviado con ID:", msg.message_id);
-  // 🔴 Aquí NO llamamos a borrarMensaje, para verificar que se muestra
+  const msg = await ctx.reply("⚡ Bot activado en grupo.");
+  borrarMensaje(ctx, msg);
 });
 // Comando /grupos
 bot.command('grupos', async (ctx) => {
