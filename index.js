@@ -1,6 +1,5 @@
 const { Telegraf } = require('telegraf');
 const bot = new Telegraf(process.env.BOT_TOKEN);
-const fs = require('fs');
 
 // === Password requerido ===
 const BOT_PASSWORD = "b43z6028-cirrus";
@@ -36,7 +35,12 @@ bot.command('auth', (ctx) => {
   }
   if (password === BOT_PASSWORD) {
     gruposAutorizados.add(ctx.chat.id);
-    ctx.reply("✅ Grupo autorizado correctamente. Ahora puedes usar /start.");
+    gruposActivos.set(ctx.chat.id, {
+      nombre: ctx.chat.title,
+      usuariosProcesados: 0,
+      usuariosRechazados: 0
+    });
+    ctx.reply("✅ Grupo autorizado y activado correctamente. Ya puedes usar /grupos y /stats.");
   } else {
     ctx.reply("❌ Password incorrecto. Intenta de nuevo.");
   }
@@ -65,56 +69,6 @@ bot.command('stats', (ctx) => {
   });
   ctx.reply(salida, { parse_mode: "MarkdownV2" });
 });
-// === Funciones auxiliares ===
-async function obtenerUserId(ctx) {
-  if (ctx.message && ctx.message.reply_to_message) {
-    return ctx.message.reply_to_message.from.id;
-  }
-  if (ctx.args && ctx.args[0]) {
-    const idNum = parseInt(ctx.args[0]);
-    if (!isNaN(idNum)) return idNum;
-    return null;
-  }
-  return null;
-}
-
-async function aplicarCastigo(ctx, userId, tipo, duracionSegundos, motivo) {
-  try {
-    if (tipo === 'ban') {
-      await ctx.telegram.banChatMember(ctx.chat.id, userId, { until_date: Math.floor(Date.now() / 1000) + duracionSegundos });
-      return ctx.reply(`🚫 Usuario baneado por ${Math.floor(duracionSegundos / 86400)} días. Motivo: ${motivo}`);
-    }
-    if (tipo === 'mute') {
-      await ctx.telegram.restrictChatMember(ctx.chat.id, userId, {
-        permissions: { can_send_messages: false, can_send_media_messages: false, can_send_other_messages: false },
-        until_date: Math.floor(Date.now() / 1000) + duracionSegundos
-      });
-      return ctx.reply(`🔇 Usuario muteado por ${Math.floor(duracionSegundos / 3600)} horas. Motivo: ${motivo}`);
-    }
-    if (tipo === 'kick') {
-      await ctx.telegram.banChatMember(ctx.chat.id, userId);
-      await ctx.telegram.unbanChatMember(ctx.chat.id, userId);
-      return ctx.reply(`👢 Usuario expulsado. Motivo: ${motivo}`);
-    }
-    if (tipo === 'warn') {
-      return ctx.reply(`⚠️ Usuario advertido. Motivo: ${motivo}`);
-    }
-  } catch (err) {
-    console.error("Error en aplicarCastigo:", err);
-    return ctx.reply("❌ Error al aplicar el castigo.");
-  }
-}
-
-function convertirIntervalo(valor, unidad) {
-  switch (unidad) {
-    case 's': return valor;
-    case 'm': return valor * 60;
-    case 'h': return valor * 3600;
-    case 'd': return valor * 86400;
-    default: return valor;
-  }
-}
-
 // === Lanzar bot en Railway ===
 bot.launch()
   .then(() => console.log("✅ Bot iniciado en Railway."))
