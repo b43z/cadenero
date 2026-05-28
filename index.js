@@ -182,46 +182,56 @@ bot.command('menu', async (ctx) => {
 // === Manejo de botones (configuración y menú) ===
 bot.on('callback_query', async (ctx) => {
   const data = ctx.callbackQuery.data;
-  const chatId = ctx.callbackQuery.message.chat.id; // usar el chat del mensaje
+  const chatId = ctx.callbackQuery.message.chat.id; // chat correcto
   let respuesta = "";
 
-  if (data === "cmd_start") {
-    respuesta = "⚡ Usa el comando /start directamente en el grupo para activar el bot.";
-  } else if (data === "cmd_grupos") {
-    if (gruposActivos.size === 0) {
-      respuesta = "📭 El bot no está activo en ningún grupo aún.";
-    } else {
-      respuesta = "📊 Grupos activos:\n\n";
-      gruposActivos.forEach((grupo, id) => {
-        respuesta += `• ${grupo.nombre} (ID: ${id})\n   Estado: ${grupo.autorizado ? "✅ Autorizado" : "⚠️ Pendiente"}\n   Procesados: ${grupo.usuariosProcesados}\n   Rechazados: ${grupo.usuariosRechazados}\n\n`;
-      });
-    }
-  } else if (data === "cmd_stats") {
-  if (gruposActivos.size === 0) {
-      respuesta = "📭 No hay estadísticas porque el bot no está activo en ningún grupo.";
-    } else {
-      respuesta = "📈 Estadísticas del bot:\n\n";
-      gruposActivos.forEach((grupo, id) => {
-        respuesta += `• ${grupo.nombre} (ID: ${id})\n`;
-        respuesta += `   Procesados: ${grupo.usuariosProcesados}\n`;
-        respuesta += `   Rechazados: ${grupo.usuariosRechazados}\n`;
-        respuesta += `   Estado: ${grupo.autorizado ? "✅ Autorizado" : "⚠️ Pendiente"}\n\n`;
-      });
-    }
-  } else if (data === "cmd_auth") {
-    respuesta = "🔑 Usa /auth <password> para autorizar este grupo.";
-  } else if (data === "cmd_delgrupo") {
-    respuesta = "🗑️ Usa /delgrupo para eliminar este grupo de la lista de activos.";
-  } else if (data === "cmd_config") {
-    respuesta = "⚙️ Panel de configuración. Aquí podrás ajustar warns y duración de baneos.";
+  switch (data) {
+    case "cmd_start":
+      respuesta = "⚡ Usa el comando /start directamente en el grupo para activar el bot.";
+      break;
+
+    case "cmd_grupos":
+      if (gruposActivos.size === 0) {
+        respuesta = "📭 El bot no está activo en ningún grupo aún.";
+      } else {
+        respuesta = "📊 Grupos activos:\n\n";
+        gruposActivos.forEach((grupo, id) => {
+          respuesta += `• ${grupo.nombre} (ID: ${id})\n   Estado: ${grupo.autorizado ? "✅ Autorizado" : "⚠️ Pendiente"}\n   Procesados: ${grupo.usuariosProcesados}\n   Rechazados: ${grupo.usuariosRechazados}\n\n`;
+        });
+      }
+      break;
+
+    case "cmd_stats":
+      if (gruposActivos.size === 0) {
+        respuesta = "📭 No hay estadísticas porque el bot no está activo en ningún grupo.";
+      } else {
+        respuesta = "📈 Estadísticas del bot:\n\n";
+        gruposActivos.forEach((grupo, id) => {
+          respuesta += `• ${grupo.nombre} (ID: ${id})\n   Procesados: ${grupo.usuariosProcesados}\n   Rechazados: ${grupo.usuariosRechazados}\n   Estado: ${grupo.autorizado ? "✅ Autorizado" : "⚠️ Pendiente"}\n\n`;
+        });
+      }
+      break;
+
+    case "cmd_auth":
+      respuesta = "🔑 Usa /auth <password> para autorizar este grupo.";
+      break;
+
+    case "cmd_delgrupo":
+      respuesta = "🗑️ Usa /delgrupo para eliminar este grupo de la lista de activos.";
+      break;
+
+    case "cmd_config":
+      respuesta = "⚙️ Panel de configuración. Aquí podrás ajustar warns y duración de baneos.";
+      break;
   }
 
   if (respuesta) {
     await ctx.telegram.sendMessage(chatId, respuesta, { parse_mode: "MarkdownV2" });
   }
-  await ctx.answerCallbackQuery(); // confirma la acción al cliente de Telegram
-});
 
+  // Confirma la acción al cliente de Telegram
+  await ctx.answerCallbackQuery();
+});
 // === Funciones auxiliares necesarias ===
 async function obtenerUserId(ctx) {
   if (ctx.message && ctx.message.reply_to_message) {
