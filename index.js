@@ -71,7 +71,7 @@ async function esAdminDelGrupo(ctx, userId) {
     return false;
   }
 }
-// Procesamiento de usuarios y middleware
+//procesamiento de usuarios y middleware
 async function procesarUsuario(ctx, user, tipo = 'directo') {
   const userId = user.id;
   const chatId = ctx.chat.id;
@@ -132,8 +132,6 @@ bot.on('my_chat_member', async (ctx) => {
         nombre: ctx.chat.title,
         fecha_solicitud: new Date()
       });
-
-      // Pedir password con force_reply
       ctx.reply("🔐 Este grupo requiere autenticación.\nPor favor ingresa la contraseña:", {
         reply_markup: { force_reply: true }
       });
@@ -151,15 +149,12 @@ bot.on('my_chat_member', async (ctx) => {
 // Captura automática del password
 bot.on('message', async (ctx) => {
   const chatId = ctx.chat.id;
-
-  // Solo si el grupo está pendiente
   if (gruposPendientes.has(chatId)) {
     const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
     if (!esAdmin) {
       ctx.reply("❌ Solo administradores pueden autorizar el grupo.");
       return;
     }
-
     const passwordIngresado = ctx.message.text.trim();
     if (passwordIngresado === BOT_PASSWORD) {
       gruposAutorizados.add(chatId);
@@ -172,6 +167,57 @@ bot.on('message', async (ctx) => {
       intentosFallidos.set(chatId, (intentosFallidos.get(chatId) || 0) + 1);
     }
   }
+});
+
+// Comando /auth corregido
+bot.command('auth', async (ctx) => {
+  const chatId = ctx.chat.id;
+  if (!['group','supergroup'].includes(ctx.chat.type)) return;
+
+  const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
+  if (!esAdmin) {
+    ctx.reply("❌ Solo administradores pueden usar este comando.");
+    return;
+  }
+
+  const passwordIngresado = ctx.message.text.split(' ').slice(1).join(' ');
+  if (!passwordIngresado) {
+    ctx.reply("❌ Uso: /auth contraseña");
+    return;
+  }
+
+  if (passwordIngresado === BOT_PASSWORD) {
+    gruposAutorizados.add(chatId);
+    registrarGrupo(chatId, ctx.chat.title);
+    gruposPendientes.delete(chatId);
+    intentosFallidos.delete(chatId);
+    ctx.reply("✅ Grupo autorizado correctamente.");
+    console.log(`🔑 Grupo autorizado: ${ctx.chat.title} (${chatId})`);
+  } else {
+    ctx.reply("❌ Contraseña incorrecta.");
+  }
+});
+
+// Comando /grupos corregido
+bot.command('grupos', (ctx) => {
+  if (gruposActivos.size === 0) {
+    ctx.reply("📭 El bot no está activo en ningún grupo aún.");
+    return;
+  }
+  let mensaje = "📊 **Grupos Activos del Bot**\n\n";
+  let contador = 1;
+  gruposActivos.forEach((info, chatId) => {
+    const tiempoActivo = Math.floor((new Date() - info.fechaInicio) / 1000 / 60);
+    const estado = gruposAutorizados.has(chatId) ? "✅ Autorizado" : "⚠️ Pendiente";
+    mensaje += `${contador}. **${info.nombre}**\n`;
+    mensaje += `   • ID: \`${chatId}\`\n`;
+    mensaje += `   • Estado: ${estado}\n`;
+    mensaje += `   • Usuarios procesados: ${info.usuariosProcesados}\n`;
+    mensaje += `   • Usuarios rechazados: ${info.usuariosRechazados}\n`;
+    mensaje += `   • Tiempo activo: ${tiempoActivo} min\n\n`;
+    contador++;
+  });
+  ctx.reply(mensaje, { parse_mode: 'Markdown' });
 });
 // Limpieza automática de grupos pendientes
 setInterval(async () => {
@@ -214,6 +260,7 @@ bot.on('chat_join_request', async (ctx) => {
   const user = ctx.chatJoinRequest.from;
   await procesarUsuario(ctx, user, 'solicitud');
 });
+
 // Comando /delgrupo <id>
 bot.command('delgrupo', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
@@ -249,3 +296,4 @@ bot.launch()
 // Graceful stop
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
+              
