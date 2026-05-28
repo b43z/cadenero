@@ -182,7 +182,7 @@ bot.on('callback_query', async (ctx) => {
     }
   }
 
-  // ... aquí mantienes la lógica de configuración (set_warns, set_ban, etc.)
+  // Aquí mantienes la lógica de configuración (set_warns, set_ban, etc.)
 
   await bot.telegram.sendMessage(chatId, respuesta, { 
     parse_mode: "MarkdownV2", 
@@ -215,7 +215,7 @@ async function aplicarCastigo(ctx, userId, tipo, duracionSegundos, motivo) {
         permissions: { can_send_messages: false, can_send_media_messages: false, can_send_other_messages: false },
         until_date: Math.floor(Date.now() / 1000) + duracionSegundos
       });
- return ctx.reply(`🔇 Usuario muteado por ${Math.floor(duracionSegundos / 3600)} horas. Motivo: ${motivo}`);
+            return ctx.reply(`🔇 Usuario muteado por ${Math.floor(duracionSegundos / 3600)} horas. Motivo: ${motivo}`);
     }
     if (tipo === 'kick') {
       await ctx.telegram.banChatMember(ctx.chat.id, userId);
