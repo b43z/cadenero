@@ -73,6 +73,10 @@ function registrarGrupo(chatId, nombre) {
 // Cargar grupos al iniciar
 // --- BLOQUE 2: Utilidades y validaciones ---
 cargarGrupos();
+// 🔧 Corrección: asegurar que todos los grupos cargados queden autorizados
+for (const [id] of gruposActivos.entries()) {
+  gruposAutorizados.add(Number(id));
+}
 const VALIDACIONES = {
   soloSimbolos: /^[\p{P}\p{S}]+$/u,
   unaLetra: /^[A-Za-zÁÉÍÓÚÜÑ]$/u,
