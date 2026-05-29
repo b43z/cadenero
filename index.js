@@ -185,17 +185,21 @@ bot.on('message', async (ctx) => {
 
     if (passwordIngresado === BOT_PASSWORD) {
       gruposAutorizados.add(chatId);
+
+      // 🔧 Registrar el grupo al autorizar
+      registrarGrupo(chatId, ctx.chat.title);
+
       gruposPendientes.delete(chatId);
       intentosFallidos.delete(chatId);
       guardarGrupos();
 
-      // 🔴 Borrar el mensaje con la contraseña para que no quede visible
+      // 🔴 Borrar el mensaje con la contraseña
       ctx.deleteMessage(ctx.message.message_id).catch(() => {});
 
       autoDelete(ctx, ctx.reply("✅ Grupo autorizado correctamente."));
       console.log(`🔑 Grupo autorizado: ${ctx.chat.title} (${chatId})`);
     } else {
-      // 🔴 También puedes borrar el mensaje incorrecto para que no quede expuesto
+      // 🔴 También borrar el mensaje incorrecto
       ctx.deleteMessage(ctx.message.message_id).catch(() => {});
 
       autoDelete(ctx, ctx.reply("❌ Contraseña incorrecta. El bot se eliminará en 10 minutos si no se autoriza."));
@@ -284,16 +288,14 @@ bot.command('auth', async (ctx) => {
   if (passwordIngresado === BOT_PASSWORD) {
     gruposAutorizados.add(chatId);
 
-    // 🔧 Registrar el grupo al autorizar para que aparezca en /grupos
+    // 🔧 Registrar el grupo al autorizar
     registrarGrupo(chatId, ctx.chat.title);
 
     gruposPendientes.delete(chatId);
     intentosFallidos.delete(chatId);
     guardarGrupos();
 
-    // Borrar el mensaje con la contraseña
     ctx.deleteMessage(ctx.message.message_id).catch(() => {});
-
     autoDelete(ctx, ctx.reply("✅ Grupo autorizado correctamente."));
     console.log(`🔑 Grupo autorizado vía /auth: ${ctx.chat.title} (${chatId})`);
   } else {
