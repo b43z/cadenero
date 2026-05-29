@@ -214,6 +214,54 @@ bot.on('message', async (ctx) => {
     }
   }
 });
+// --- BLOQUE 7: Limpieza automática y manejo de miembros ---
+// Diagnóstico: mostrar grupos autorizados al inicio
+console.log("🔎 Grupos autorizados al arrancar:", [...gruposAutorizados]);
+
+setInterval(async () => {
+  const ahora = new Date();
+  for (const [chatId, info] of gruposPendientes.entries()) {
+    const minutosPendiente = (ahora - info.fecha_solicitud) / 1000 / 60;
+    if (minutosPendiente > 10) {
+      try {
+        await bot.telegram.leaveChat(chatId);
+        gruposPendientes.delete(chatId);
+        gruposActivos.delete(chatId);
+        intentosFallidos.delete(chatId);
+        guardarGrupos();
+        console.log(`⏱️ Grupo eliminado automáticamente por no autorizarse: ${chatId}`);
+      } catch (err) {
+        console.error(`Error al salir del grupo ${chatId}:`, err.message);
+      }
+    }
+  }
+}, 60000);
+
+// Procesar nuevos miembros
+bot.on('new_chat_members', async (ctx) => {
+  const chatId = ctx.chat.id;
+  console.log(`👥 Nuevos miembros detectados en grupo ${chatId}`);
+  if (!gruposAutorizados.has(chatId)) {
+    console.warn(`⚠️ Grupo ${chatId} no está en gruposAutorizados, no se procesan usuarios.`);
+    return autoDelete(ctx, ctx.reply("⚠️ Este grupo aún no está autorizado. Ingresa la contraseña."));
+  }
+  for (const user of ctx.message.new_chat_members) {
+    await procesarUsuario(ctx, user, 'directo');
+  }
+});
+
+// Procesar solicitudes de unión
+bot.on('chat_join_request', async (ctx) => {
+  const chatId = ctx.chat.id;
+  console.log(`📩 Solicitud de unión detectada en grupo ${chatId}`);
+  if (!gruposAutorizados.has(chatId)) {
+    console.warn(`⚠️ Grupo ${chatId} no está en gruposAutorizados, solicitud no procesada.`);
+    return autoDelete(ctx, ctx.reply("⚠️ Este grupo aún no está autorizado. Ingresa la contraseña."));
+  }
+  const user = ctx.chatJoinRequest.from;
+  await procesarUsuario(ctx, user, 'solicitud');
+});
+
 // --- BLOQUE 8: Comandos administrativos ---
 // Comando /delgrupo <id>
 bot.command('delgrupo', async (ctx) => {
