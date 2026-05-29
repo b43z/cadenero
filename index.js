@@ -247,32 +247,32 @@ bot.on('chat_join_request', async (ctx) => {
   const user = ctx.chatJoinRequest.from;
   await procesarUsuario(ctx, user, 'solicitud');
 });
-// --- BLOQUE 9: Comando /grupos ---
-bot.command('grupos', async (ctx) => {
-  const chatId = ctx.chat.id;
+// --- BLOQUE 9: Comandos administrativos ---
+// Comando /delgrupo <id>
+bot.command('delgrupo', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) {
     return autoDelete(ctx, ctx.reply("❌ Solo administradores pueden usar este comando."));
   }
-
-  // 🔧 Registrar el grupo actual si está autorizado pero no está en gruposActivos
-  if (gruposAutorizados.has(chatId) && !gruposActivos.has(chatId)) {
-    registrarGrupo(chatId, ctx.chat.title);
+  if (!ctx.args || ctx.args.length === 0) {
+    return autoDelete(ctx, ctx.reply("❌ Uso: `/delgrupo <id>`", { parse_mode: 'Markdown' }));
   }
-
-  if (gruposActivos.size === 0) {
-    return autoDelete(ctx, ctx.reply("⚠️ No hay grupos registrados."));
+  const idEliminar = parseInt(ctx.args[0]);
+  if (isNaN(idEliminar)) {
+    return autoDelete(ctx, ctx.reply("⚠️ El ID debe ser un número válido."));
   }
-
-  let mensaje = "📋 Lista de grupos registrados:\n\n";
-  for (const [id, grupo] of gruposActivos.entries()) {
-    const autorizado = gruposAutorizados.has(id) ? "✅ Autorizado" : "⏳ Pendiente";
-    mensaje += `• ${grupo.nombre} (ID: ${id}) → ${autorizado}\n`;
+  if (gruposActivos.has(idEliminar)) {
+    gruposActivos.delete(idEliminar);
+    gruposAutorizados.delete(idEliminar);
+    gruposPendientes.delete(idEliminar);
+    intentosFallidos.delete(idEliminar);
+    guardarGrupos();
+    autoDelete(ctx, ctx.reply(`🗑️ Grupo eliminado: ${idEliminar}`));
+    console.log(`🗑️ Grupo eliminado manualmente: ${idEliminar}`);
+  } else {
+    autoDelete(ctx, ctx.reply("⚠️ Ese grupo no está registrado."));
   }
-
-  autoDelete(ctx, ctx.reply(mensaje));
 });
-
 
 // Comando /auth <password>
 bot.command('auth', async (ctx) => {
@@ -307,9 +307,21 @@ bot.command('auth', async (ctx) => {
 
 // Comando /grupos
 bot.command('grupos', async (ctx) => {
+  const chatId = ctx.chat.id;
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) {
     return autoDelete(ctx, ctx.reply("❌ Solo administradores pueden usar este comando."));
+  }
+
+  // 🔧 Registrar el grupo actual si está autorizado pero no está en gruposActivos
+  if (gruposAutorizados.has(chatId) && !gruposActivos.has(chatId)) {
+    registrarGrupo(chatId, ctx.chat.title);
+    guardarGrupos();
+  }
+
+  // 🔧 Cargar grupos desde JSON si el mapa está vacío
+  if (gruposActivos.size === 0) {
+    cargarGrupos();
   }
 
   if (gruposActivos.size === 0) {
@@ -324,6 +336,7 @@ bot.command('grupos', async (ctx) => {
 
   autoDelete(ctx, ctx.reply(mensaje));
 });
+
 // --- BLOQUE 10: Lanzamiento y cierre del bot ---
 // Lanzar bot en Railway
 bot.launch()
