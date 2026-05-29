@@ -65,8 +65,35 @@ function registrarGrupo(chatId, nombre) {
   }
 }
 
-cargarGrupos();
+// Función para cargar grupos desde JSON
+function cargarGrupos() {
+  try {
+    if (fs.existsSync(FILE_GRUPOS)) {
+      const data = fs.readFileSync(FILE_GRUPOS, "utf8");
+      if (data.trim().length > 0) {
+        const grupos = JSON.parse(data);
+        gruposActivos.clear();
+        gruposAutorizados.clear(); // limpiar autorizados también
 
+        grupos.forEach(grupo => {
+          if (grupo.id && grupo.nombre) {
+            gruposActivos.set(grupo.id, grupo);
+            gruposAutorizados.add(grupo.id); // marcar como autorizado
+          }
+        });
+
+        console.log(`✅ Se cargaron ${gruposActivos.size} grupos desde ${FILE_GRUPOS}`);
+      } else {
+        console.warn("⚠️ El archivo de grupos está vacío.");
+      }
+    } else {
+      console.warn("⚠️ No existe el archivo de grupos, creando uno nuevo vacío");
+      fs.writeFileSync(FILE_GRUPOS, "[]", "utf8");
+    }
+  } catch (err) {
+    console.error("❌ Error al cargar grupos:", err.message);
+  }
+}
 // --- BLOQUE 2: Utilidades y validaciones ---
 const VALIDACIONES = {
   soloSimbolos: /^[\p{P}\p{S}]+$/u,
@@ -309,7 +336,7 @@ bot.command('grupos', async (ctx) => {
     return autoDelete(ctx, ctx.reply("❌ Solo administradores pueden usar este comando."));
   }
 
-  // 🔄 Siempre recargar desde JSON antes de mostrar
+  // 🔄 Siempre recargar desde JSON
   cargarGrupos();
 
   if (gruposActivos.size === 0) {
