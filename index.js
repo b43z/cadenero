@@ -68,8 +68,9 @@ function registrarGrupo(chatId, nombre) {
     console.log(`📌 Grupo registrado: ${nombre} (${chatId})`);
   }
 }
-// --- BLOQUE 2: Utilidades y validaciones ---
+
 // Cargar grupos al iniciar
+// --- BLOQUE 2: Utilidades y validaciones ---
 cargarGrupos();
 const VALIDACIONES = {
   soloSimbolos: /^[\p{P}\p{S}]+$/u,
@@ -203,55 +204,20 @@ bot.on('message', async (ctx) => {
       registrarGrupo(chatId, ctx.chat.title);
       gruposPendientes.delete(chatId);
       intentosFallidos.delete(chatId);
-      guardarGrupos(); // persistencia asegurada
+      guardarGrupos();
       ctx.deleteMessage(ctx.message.message_id).catch(() => {});
       autoDelete(ctx, ctx.reply("✅ Grupo autorizado correctamente."));
     } else {
       ctx.deleteMessage(ctx.message.message_id).catch(() => {});
-      autoDelete(ctx, ctx.reply("❌ Contraseña incorrecta. El bot se eliminará en 10 minutos si no se autoriza."));
+           autoDelete(ctx, ctx.reply("❌ Contraseña incorrecta. El bot se eliminará en 10 minutos si no se autoriza."));
       intentosFallidos.set(chatId, (intentosFallidos.get(chatId) || 0) + 1);
     }
   }
 });
-// --- BLOQUE 7: Limpieza automática y manejo de miembros ---
-setInterval(async () => {
-  const ahora = new Date();
-  for (const [chatId, info] of gruposPendientes.entries()) {
-    const minutosPendiente = (ahora - info.fecha_solicitud) / 1000 / 60;
-    if (minutosPendiente > 10) {
-      try {
-        await bot.telegram.leaveChat(chatId);
-        gruposPendientes.delete(chatId);
-        gruposActivos.delete(chatId);
-        intentosFallidos.delete(chatId);
-        guardarGrupos();
-        console.log(`⏱️ Grupo eliminado automáticamente por no autorizarse: ${chatId}`);
-      } catch (err) {
-        console.error(`Error al salir del grupo ${chatId}:`, err.message);
-      }
+      autoDelete(ctx, ctx.reply("❌ Contraseña incorrecta. El bot se eliminará en 10 minutos si no se autoriza."));
+      intentosFallidos.set(chatId, (intentosFallidos.get(chatId) || 0) + 1);
     }
   }
-}, 60000);
-
-// Procesar nuevos miembros
-bot.on('new_chat_members', async (ctx) => {
-  const chatId = ctx.chat.id;
-  if (!gruposAutorizados.has(chatId)) {
-    return autoDelete(ctx, ctx.reply("⚠️ Este grupo aún no está autorizado. Ingresa la contraseña."));
-  }
-  for (const user of ctx.message.new_chat_members) {
-    await procesarUsuario(ctx, user, 'directo');
-  }
-});
-
-// Procesar solicitudes de unión
-bot.on('chat_join_request', async (ctx) => {
-  const chatId = ctx.chat.id;
-  if (!gruposAutorizados.has(chatId)) {
-    return autoDelete(ctx, ctx.reply("⚠️ Este grupo aún no está autorizado. Ingresa la contraseña."));
-  }
-  const user = ctx.chatJoinRequest.from;
-  await procesarUsuario(ctx, user, 'solicitud');
 });
 // --- BLOQUE 8: Comandos administrativos ---
 // Comando /delgrupo <id>
@@ -289,10 +255,10 @@ bot.command('auth', async (ctx) => {
     registrarGrupo(chatId, ctx.chat.title);
     gruposPendientes.delete(chatId);
     intentosFallidos.delete(chatId);
-    guardarGrupos(); // persistencia asegurada
+    guardarGrupos();
     ctx.deleteMessage(ctx.message.message_id).catch(() => {});
     autoDelete(ctx, ctx.reply("✅ Grupo autorizado correctamente."));
-       console.log(`🔑 Grupo autorizado vía /auth: ${ctx.chat.title} (${chatId})`);
+    console.log(`🔑 Grupo autorizado vía /auth: ${ctx.chat.title} (${chatId})`);
   } else {
     ctx.deleteMessage(ctx.message.message_id).catch(() => {});
     autoDelete(ctx, ctx.reply("❌ Contraseña incorrecta."));
@@ -300,8 +266,7 @@ bot.command('auth', async (ctx) => {
   }
 });
 
-// Comando /grupos (lee directamente el JSON)
-// --- BLOQUE 8: Comando /grupos corregido ---
+// Comando /grupos simplificado
 bot.command('grupos', async (ctx) => {
   const chatId = ctx.chat.id;
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
@@ -322,8 +287,7 @@ bot.command('grupos', async (ctx) => {
       return autoDelete(ctx, ctx.reply("⚠️ No hay grupos registrados en el archivo JSON. Este grupo NO está registrado."));
     }
 
-    // 🔎 Verificar si el grupo actual está registrado
-    const grupoActual = grupos.find(g => g.id === chatId);
+    const grupoActual = grupos.find(g => Number(g.id) === Number(chatId));
     let mensaje;
     if (grupoActual) {
       mensaje = `✅ El grupo "${ctx.chat.title}" (ID: ${chatId}) está registrado y funcionando.\n` +
@@ -338,7 +302,6 @@ bot.command('grupos', async (ctx) => {
     return autoDelete(ctx, ctx.reply("❌ Error al leer el archivo de grupos."));
   }
 });
-
 // --- BLOQUE 9: Lanzamiento y cierre del bot ---
 bot.launch()
   .then(() => console.log("✅ Bot iniciado en Railway."))
