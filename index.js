@@ -24,17 +24,21 @@ function cargarGrupos() {
       if (data.trim().length > 0) {
         const grupos = JSON.parse(data);
         gruposActivos.clear();
+        gruposAutorizados.clear();
+
         grupos.forEach(grupo => {
           if (grupo.id && grupo.nombre) {
             gruposActivos.set(grupo.id, grupo);
             gruposAutorizados.add(grupo.id);
           }
         });
+
         console.log(`✅ Se cargaron ${gruposActivos.size} grupos desde ${FILE_GRUPOS}`);
       } else {
-        fs.writeFileSync(FILE_GRUPOS, "[]", "utf8");
+        console.warn("⚠️ El archivo de grupos está vacío.");
       }
     } else {
+      console.warn("⚠️ No existe el archivo de grupos, creando uno nuevo vacío");
       fs.writeFileSync(FILE_GRUPOS, "[]", "utf8");
     }
   } catch (err) {
@@ -64,36 +68,9 @@ function registrarGrupo(chatId, nombre) {
     console.log(`📌 Grupo registrado: ${nombre} (${chatId})`);
   }
 }
-// Función para cargar grupos desde JSON
-function cargarGrupos() {
-  try {
-    if (fs.existsSync(FILE_GRUPOS)) {
-      const data = fs.readFileSync(FILE_GRUPOS, "utf8");
-      if (data.trim().length > 0) {
-        const grupos = JSON.parse(data);
-        gruposActivos.clear();
-        gruposAutorizados.clear(); // limpiar autorizados también
-
-        grupos.forEach(grupo => {
-          if (grupo.id && grupo.nombre) {
-            gruposActivos.set(grupo.id, grupo);
-            gruposAutorizados.add(grupo.id); // marcar como autorizado
-          }
-        });
-
-        console.log(`✅ Se cargaron ${gruposActivos.size} grupos desde ${FILE_GRUPOS}`);
-      } else {
-        console.warn("⚠️ El archivo de grupos está vacío.");
-      }
-    } else {
-      console.warn("⚠️ No existe el archivo de grupos, creando uno nuevo vacío");
-      fs.writeFileSync(FILE_GRUPOS, "[]", "utf8");
-    }
-  } catch (err) {
-    console.error("❌ Error al cargar grupos:", err.message);
-  }
-}
 // --- BLOQUE 2: Utilidades y validaciones ---
+// Cargar grupos al iniciar
+cargarGrupos();
 const VALIDACIONES = {
   soloSimbolos: /^[\p{P}\p{S}]+$/u,
   unaLetra: /^[A-Za-zÁÉÍÓÚÜÑ]$/u,
@@ -130,7 +107,6 @@ async function esAdminDelGrupo(ctx, userId) {
     return false;
   }
 }
-
 // --- BLOQUE 3: Procesamiento de usuarios ---
 function limpiarUsuarioProcesado(userId) {
   if (timeoutMap.has(userId)) clearTimeout(timeoutMap.get(userId));
@@ -178,7 +154,6 @@ async function procesarUsuario(ctx, user, tipo = 'directo') {
     await autoDelete(ctx, ctx.reply(`❌ Error al procesar ${nombre}: ${err.message}`));
   }
 }
-
 // --- BLOQUE 4: Middleware y comandos básicos ---
 bot.use((ctx, next) => {
   if (ctx.message && ctx.message.text) {
@@ -192,7 +167,6 @@ bot.start((ctx) => {
   registrarGrupo(ctx.chat.id, ctx.chat.title);
   autoDelete(ctx, ctx.reply("⚡ Bot activado. Evaluará automáticamente a los nuevos usuarios."));
 });
-
 // --- BLOQUE 5: Manejo de entrada/salida del bot ---
 bot.on('my_chat_member', async (ctx) => {
   const chatId = ctx.chat.id;
@@ -216,7 +190,6 @@ bot.on('my_chat_member', async (ctx) => {
     console.log(`🗑️ Bot eliminado del grupo: ${chatId}`);
   }
 });
-
 // --- BLOQUE 6: Autenticación de grupos ---
 bot.on('message', async (ctx) => {
   const chatId = ctx.chat.id;
@@ -230,7 +203,7 @@ bot.on('message', async (ctx) => {
       registrarGrupo(chatId, ctx.chat.title);
       gruposPendientes.delete(chatId);
       intentosFallidos.delete(chatId);
-      guardarGrupos();
+      guardarGrupos(); // persistencia asegurada
       ctx.deleteMessage(ctx.message.message_id).catch(() => {});
       autoDelete(ctx, ctx.reply("✅ Grupo autorizado correctamente."));
     } else {
@@ -280,7 +253,6 @@ bot.on('chat_join_request', async (ctx) => {
   const user = ctx.chatJoinRequest.from;
   await procesarUsuario(ctx, user, 'solicitud');
 });
-
 // --- BLOQUE 8: Comandos administrativos ---
 // Comando /delgrupo <id>
 bot.command('delgrupo', async (ctx) => {
@@ -317,10 +289,10 @@ bot.command('auth', async (ctx) => {
     registrarGrupo(chatId, ctx.chat.title);
     gruposPendientes.delete(chatId);
     intentosFallidos.delete(chatId);
-    guardarGrupos();
+    guardarGrupos(); // persistencia asegurada
     ctx.deleteMessage(ctx.message.message_id).catch(() => {});
     autoDelete(ctx, ctx.reply("✅ Grupo autorizado correctamente."));
-    console.log(`🔑 Grupo autorizado vía /auth: ${ctx.chat.title} (${chatId})`);
+       console.log(`🔑 Grupo autorizado vía /auth: ${ctx.chat.title} (${chatId})`);
   } else {
     ctx.deleteMessage(ctx.message.message_id).catch(() => {});
     autoDelete(ctx, ctx.reply("❌ Contraseña incorrecta."));
@@ -328,7 +300,6 @@ bot.command('auth', async (ctx) => {
   }
 });
 
-// --- BLOQUE 8: Comando /grupos ---
 // Comando /grupos (lee directamente el JSON)
 bot.command('grupos', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
@@ -337,7 +308,6 @@ bot.command('grupos', async (ctx) => {
   }
 
   try {
-    // Leer directamente el archivo JSON
     const data = fs.readFileSync(FILE_GRUPOS, "utf8");
 
     if (!data || data.trim().length === 0) {
@@ -362,7 +332,6 @@ bot.command('grupos', async (ctx) => {
     return autoDelete(ctx, ctx.reply("❌ Error al leer el archivo de grupos."));
   }
 });
-
 // --- BLOQUE 9: Lanzamiento y cierre del bot ---
 bot.launch()
   .then(() => console.log("✅ Bot iniciado en Railway."))
