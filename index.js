@@ -87,7 +87,6 @@ const VALIDACIONES = {
   letrasRepetidas: /(.)\1{2,}/u,
   letraMasSimbolo: /^[A-Za-zÁÉÍÓÚÜÑ][\p{P}\p{S}]$/u
 };
-
 function nombreInvalido(nombre) {
   if (!nombre) return true;
   return (
