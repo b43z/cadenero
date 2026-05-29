@@ -73,6 +73,11 @@ function registrarGrupo(chatId, nombre) {
 // Cargar grupos al iniciar
 // --- BLOQUE 2: Utilidades y validaciones ---
 cargarGrupos();
+// --- BLOQUE DE PRUEBA: Escuchar todos los mensajes ---
+bot.on('text', async (ctx) => {
+  console.log("📩 Mensaje recibido:", ctx.message.text, "en chatId:", ctx.chat.id);
+  await ctx.reply(`Echo: ${ctx.message.text}`);
+});
 const VALIDACIONES = {
   soloSimbolos: /^[\p{P}\p{S}]+$/u,
   unaLetra: /^[A-Za-zÁÉÍÓÚÜÑ]$/u,
