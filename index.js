@@ -76,6 +76,10 @@ function registrarGrupo(chatId, nombre) {
 cargarGrupos();
 
 // 🔧 Corrección: asegurar que todos los grupos cargados queden autorizados
+// --- BLOQUE 2: Utilidades y validaciones ---
+cargarGrupos();
+
+// 🔧 Forzar que todos los IDs sean número
 for (const [id] of gruposActivos.entries()) {
   gruposAutorizados.add(Number(id));
 }
@@ -192,7 +196,6 @@ bot.start((ctx) => {
   ctx.reply(mensaje); // ✅ no usar autoDelete aquí
 });
 
-
 // --- BLOQUE 5: Manejo de entrada/salida del bot ---
 bot.on('my_chat_member', async (ctx) => {
   const chatId = ctx.chat.id;
@@ -283,12 +286,18 @@ bot.on('chat_join_request', async (ctx) => {
 
   if (!gruposAutorizados.has(chatId)) {
     console.warn(`⚠️ Grupo ${chatId} no está en gruposAutorizados, solicitud no procesada.`);
-    return autoDelete(ctx, ctx.reply("⚠️ Este grupo aún no está autorizado. Ingresa la contraseña."));
+    return ctx.reply("⚠️ Este grupo aún no está autorizado. Ingresa la contraseña.");
   }
 
   const user = ctx.chatJoinRequest.from;
   console.log("👤 Usuario en espera:", user.id, user.first_name, user.username);
-  await procesarUsuario(ctx, user, 'solicitud');
+
+  try {
+    await procesarUsuario(ctx, user, 'solicitud');
+    console.log(`✅ Usuario ${user.id} procesado correctamente`);
+  } catch (err) {
+    console.error("❌ Error al procesar usuario:", err);
+  }
 });
 // --- BLOQUE 8: Comandos administrativos ---
 // Comando /delgrupo <id>
