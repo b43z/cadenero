@@ -301,6 +301,7 @@ bot.command('auth', async (ctx) => {
 });
 
 // Comando /grupos (lee directamente el JSON)
+// --- BLOQUE 8: Comando /grupos corregido ---
 bot.command('grupos', async (ctx) => {
   const chatId = ctx.chat.id;
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
@@ -312,13 +313,13 @@ bot.command('grupos', async (ctx) => {
     const data = fs.readFileSync(FILE_GRUPOS, "utf8");
 
     if (!data || data.trim().length === 0) {
-      return autoDelete(ctx, ctx.reply("⚠️ El archivo de grupos está vacío."));
+      return autoDelete(ctx, ctx.reply("⚠️ El archivo de grupos está vacío. Este grupo NO está registrado."));
     }
 
     const grupos = JSON.parse(data);
 
     if (!Array.isArray(grupos) || grupos.length === 0) {
-      return autoDelete(ctx, ctx.reply("⚠️ No hay grupos registrados en el archivo JSON."));
+      return autoDelete(ctx, ctx.reply("⚠️ No hay grupos registrados en el archivo JSON. Este grupo NO está registrado."));
     }
 
     // 🔎 Verificar si el grupo actual está registrado
@@ -337,6 +338,7 @@ bot.command('grupos', async (ctx) => {
     return autoDelete(ctx, ctx.reply("❌ Error al leer el archivo de grupos."));
   }
 });
+
 // --- BLOQUE 9: Lanzamiento y cierre del bot ---
 bot.launch()
   .then(() => console.log("✅ Bot iniciado en Railway."))
