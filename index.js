@@ -25,8 +25,12 @@ function cargarGrupos() {
   if (fs.existsSync(FILE_GRUPOS)) {
     try {
       const data = JSON.parse(fs.readFileSync(FILE_GRUPOS));
-      data.forEach(grupo => gruposActivos.set(grupo.id, grupo));
-      console.log("📂 gruposActivos cargados desde JSON.");
+      data.forEach(grupo => {
+        gruposActivos.set(grupo.id, grupo);
+        // 🔑 Autorizar automáticamente los grupos cargados
+        gruposAutorizados.add(grupo.id);
+      });
+      console.log("📂 gruposActivos cargados y autorizados desde JSON.");
     } catch (err) {
       console.error("❌ Error al cargar grupos:", err.message);
     }
