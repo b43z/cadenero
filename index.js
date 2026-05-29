@@ -29,11 +29,12 @@ function cargarGrupos() {
         grupos.forEach(grupo => {
           if (grupo.id && grupo.nombre) {
             gruposActivos.set(grupo.id, grupo);
-            gruposAutorizados.add(grupo.id);
+            gruposAutorizados.add(Number(grupo.id)); // 🔎 aseguramos que sea número
           }
         });
 
         console.log(`✅ Se cargaron ${gruposActivos.size} grupos desde ${FILE_GRUPOS}`);
+        console.log("🔎 Grupos autorizados al inicio:", [...gruposAutorizados]);
       } else {
         console.warn("⚠️ El archivo de grupos está vacío.");
       }
@@ -64,11 +65,11 @@ function registrarGrupo(chatId, nombre) {
       fechaInicio: new Date().toISOString(),
       id: chatId
     });
+    gruposAutorizados.add(Number(chatId)); // 🔎 aseguramos que quede autorizado
     guardarGrupos();
     console.log(`📌 Grupo registrado: ${nombre} (${chatId})`);
   }
 }
-
 // Cargar grupos al iniciar
 // --- BLOQUE 2: Utilidades y validaciones ---
 cargarGrupos();
@@ -310,7 +311,7 @@ bot.command('auth', async (ctx) => {
 });
 
 // Comando /grupos simplificado
-// --- BLOQUE 8: Comando /grupos corregido ---
+// ---Comando /grupos corregido ---
 bot.command('grupos', async (ctx) => {
   const chatId = ctx.chat.id;
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
@@ -331,8 +332,9 @@ bot.command('grupos', async (ctx) => {
       return autoDelete(ctx, ctx.reply("⚠️ No hay grupos registrados en el archivo JSON. Este grupo NO está registrado."));
     }
 
-    // 🔎 Verificar si el grupo actual está registrado
+    // 🔎 Comparación corregida: convertir ambos a número
     const grupoActual = grupos.find(g => Number(g.id) === Number(chatId));
+
     let mensaje;
     if (grupoActual) {
       mensaje = `✅ El grupo "${ctx.chat.title}" (ID: ${chatId}) está registrado y funcionando.\n` +
@@ -341,7 +343,7 @@ bot.command('grupos', async (ctx) => {
       mensaje = `⚠️ El grupo "${ctx.chat.title}" (ID: ${chatId}) NO está registrado.`;
     }
 
-    console.log("📋 Estado del comando /grupos:", mensaje); // Diagnóstico en consola
+    console.log("📋 /grupos →", mensaje); // Diagnóstico en consola
     autoDelete(ctx, ctx.reply(mensaje));
   } catch (err) {
     console.error("❌ Error al leer grupos:", err.message);
