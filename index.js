@@ -337,15 +337,14 @@ bot.command('grupos', async (ctx) => {
   }
 
   try {
+    // Leer directamente el archivo JSON
     const data = fs.readFileSync(FILE_GRUPOS, "utf8");
-    console.log("📂 Contenido bruto del archivo:", data); // Depuración
 
-    if (data.trim().length === 0) {
+    if (!data || data.trim().length === 0) {
       return autoDelete(ctx, ctx.reply("⚠️ El archivo de grupos está vacío."));
     }
 
     const grupos = JSON.parse(data);
-    console.log("✅ Grupos parseados:", grupos); // Depuración
 
     if (!Array.isArray(grupos) || grupos.length === 0) {
       return autoDelete(ctx, ctx.reply("⚠️ No hay grupos registrados en el archivo JSON."));
@@ -353,10 +352,10 @@ bot.command('grupos', async (ctx) => {
 
     let mensaje = "📋 Lista de grupos registrados:\n\n";
     grupos.forEach(grupo => {
-      mensaje += `• ${grupo.nombre} (ID: ${grupo.id}) → ✅ Autorizado\n`;
+      mensaje += `• ${grupo.nombre} (ID: ${grupo.id})\n`;
+      mensaje += `   Procesados: ${grupo.usuariosProcesados} | Rechazados: ${grupo.usuariosRechazados}\n\n`;
     });
 
-    console.log("📤 Mensaje generado:", mensaje); // Depuración
     autoDelete(ctx, ctx.reply(mensaje));
   } catch (err) {
     console.error("❌ Error al leer grupos:", err.message);
