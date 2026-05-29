@@ -329,7 +329,7 @@ bot.command('auth', async (ctx) => {
 });
 
 // --- BLOQUE 8: Comando /grupos ---
-// Comando /grupos con depuración
+// Comando /grupos (lee directamente el JSON)
 bot.command('grupos', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) {
@@ -337,16 +337,15 @@ bot.command('grupos', async (ctx) => {
   }
 
   try {
-    // Leer directamente el archivo JSON
     const data = fs.readFileSync(FILE_GRUPOS, "utf8");
-    console.log("📂 Contenido bruto del archivo:", data); // 🔎 Depuración
+    console.log("📂 Contenido bruto del archivo:", data); // Depuración
 
     if (data.trim().length === 0) {
       return autoDelete(ctx, ctx.reply("⚠️ El archivo de grupos está vacío."));
     }
 
     const grupos = JSON.parse(data);
-    console.log("✅ Grupos parseados:", grupos); // 🔎 Depuración
+    console.log("✅ Grupos parseados:", grupos); // Depuración
 
     if (!Array.isArray(grupos) || grupos.length === 0) {
       return autoDelete(ctx, ctx.reply("⚠️ No hay grupos registrados en el archivo JSON."));
@@ -354,17 +353,17 @@ bot.command('grupos', async (ctx) => {
 
     let mensaje = "📋 Lista de grupos registrados:\n\n";
     grupos.forEach(grupo => {
-      const autorizado = "✅ Autorizado"; // si está en JSON, lo tratamos como autorizado
-      mensaje += `• ${grupo.nombre} (ID: ${grupo.id}) → ${autorizado}\n`;
+      mensaje += `• ${grupo.nombre} (ID: ${grupo.id}) → ✅ Autorizado\n`;
     });
 
-    console.log("📤 Mensaje generado:", mensaje); // 🔎 Depuración
+    console.log("📤 Mensaje generado:", mensaje); // Depuración
     autoDelete(ctx, ctx.reply(mensaje));
   } catch (err) {
     console.error("❌ Error al leer grupos:", err.message);
     return autoDelete(ctx, ctx.reply("❌ Error al leer el archivo de grupos."));
   }
 });
+
 // --- BLOQUE 9: Lanzamiento y cierre del bot ---
 bot.launch()
   .then(() => console.log("✅ Bot iniciado en Railway."))
