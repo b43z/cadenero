@@ -1,6 +1,7 @@
 // --- BLOQUE 1: Imports, inicialización y persistencia ---
 const { Telegraf } = require('telegraf');
 const fs = require('fs');
+const FILE_GRUPOS = "gruposActivos.json";
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const BOT_PASSWORD = process.env.BOT_PASSWORD || 'b43z6028-cirrus';
 
@@ -10,6 +11,63 @@ const gruposActivos = new Map();
 const gruposAutorizados = new Set();
 const gruposPendientes = new Map();
 const intentosFallidos = new Map();
+
+// Función para cargar grupos desde JSON
+function cargarGrupos() {
+  try {
+    if (fs.existsSync(FILE_GRUPOS)) {
+      const data = fs.readFileSync(FILE_GRUPOS, "utf8");
+      if (data.trim().length > 0) {
+        const grupos = JSON.parse(data);
+
+        gruposActivos.clear(); // limpiar mapa antes de cargar
+
+        grupos.forEach(grupo => {
+          if (grupo.id && grupo.nombre) {
+            gruposActivos.set(grupo.id, grupo);
+            gruposAutorizados.add(grupo.id); // 🔧 marcar como autorizado
+          }
+        });
+
+        console.log(`✅ Se cargaron ${gruposActivos.size} grupos desde ${FILE_GRUPOS}`);
+      } else {
+        console.warn("⚠️ El archivo de grupos está vacío, inicializando con []");
+        fs.writeFileSync(FILE_GRUPOS, "[]", "utf8");
+      }
+    } else {
+      console.warn("⚠️ No existe el archivo de grupos, creando uno nuevo vacío");
+      fs.writeFileSync(FILE_GRUPOS, "[]", "utf8");
+    }
+  } catch (err) {
+    console.error("❌ Error al cargar grupos:", err.message);
+  }
+}
+
+// Función para guardar grupos en JSON
+function guardarGrupos() {
+  try {
+    const grupos = Array.from(gruposActivos.values());
+    fs.writeFileSync(FILE_GRUPOS, JSON.stringify(grupos, null, 2), "utf8");
+    console.log(`💾 Se guardaron ${grupos.length} grupos en ${FILE_GRUPOS}`);
+  } catch (err) {
+    console.error("❌ Error al guardar grupos:", err.message);
+  }
+}
+
+// Función para registrar un grupo en memoria y JSON
+function registrarGrupo(chatId, nombre) {
+  if (!gruposActivos.has(chatId)) {
+    gruposActivos.set(chatId, {
+      nombre,
+      usuariosProcesados: 0,
+      usuariosRechazados: 0,
+      fechaInicio: new Date().toISOString(),
+      id: chatId
+    });
+    guardarGrupos();
+    console.log(`📌 Grupo registrado: ${nombre} (${chatId})`);
+  }
+}
 
 // Persistencia en JSON
 const FILE_GRUPOS = 'gruposActivos.json';
@@ -273,7 +331,6 @@ bot.command('delgrupo', async (ctx) => {
     autoDelete(ctx, ctx.reply("⚠️ Ese grupo no está registrado."));
   }
 });
-
 // Comando /auth <password>
 bot.command('auth', async (ctx) => {
   const chatId = ctx.chat.id;
@@ -287,8 +344,6 @@ bot.command('auth', async (ctx) => {
   const passwordIngresado = ctx.args[0].trim();
   if (passwordIngresado === BOT_PASSWORD) {
     gruposAutorizados.add(chatId);
-
-    // 🔧 Registrar el grupo al autorizar
     registrarGrupo(chatId, ctx.chat.title);
 
     gruposPendientes.delete(chatId);
@@ -313,13 +368,11 @@ bot.command('grupos', async (ctx) => {
     return autoDelete(ctx, ctx.reply("❌ Solo administradores pueden usar este comando."));
   }
 
-  // 🔧 Registrar el grupo actual si está autorizado pero no está en gruposActivos
   if (gruposAutorizados.has(chatId) && !gruposActivos.has(chatId)) {
     registrarGrupo(chatId, ctx.chat.title);
     guardarGrupos();
   }
 
-  // 🔧 Cargar grupos desde JSON si el mapa está vacío
   if (gruposActivos.size === 0) {
     cargarGrupos();
   }
