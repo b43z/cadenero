@@ -13,7 +13,7 @@ const gruposActivos = new Map();
 const gruposAutorizados = new Set();
 const gruposPendientes = new Map();
 const intentosFallidos = new Map();
-ntentosFallidos = new Map(); 
+const intentosFallidos = new Map();
 // Función para cargar grupos desde JSON
 function cargarGrupos() {
   try {
