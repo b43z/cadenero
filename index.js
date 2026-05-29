@@ -169,23 +169,7 @@ bot.use((ctx, next) => {
   return next();
 });
 
-bot.start((ctx) => {
-  registrarGrupo(ctx.chat.id, ctx.chat.title);
-  autoDelete(ctx, ctx.reply("⚡ Bot activado. Evaluará automáticamente a los nuevos usuarios."));
-});
-// --- BLOQUE 5: Manejo de entrada/salida del bot ---
-bot.on('my_chat_member', async (ctx) => {
-  const chatId = ctx.chat.id;
-  const nuevoEstado = ctx.myChatMember.new_chat_member.status;
-  const estadoAnterior = ctx.myChatMember.old_chat_member.status;
 
-  if ((estadoAnterior === 'left' || estadoAnterior === 'kicked' || !estadoAnterior) &&
-      (['member','administrator','creator'].includes(nuevoEstado))) {
-    registrarGrupo(chatId, ctx.chat.title);
-    gruposPendientes.set(chatId, { nombre: ctx.chat.title, fecha_solicitud: new Date() });
-    autoDelete(ctx, ctx.reply("🔐 Este grupo requiere autenticación.\nResponde con la contraseña:", {
-      reply_markup: { force_reply: true, selective: true }
-    }));
   }
 
   if (nuevoEstado === 'left' || nuevoEstado === 'kicked') {
