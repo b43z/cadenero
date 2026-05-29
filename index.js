@@ -316,20 +316,11 @@ bot.command('grupos', async (ctx) => {
   const chatId = ctx.chat.id;
   console.log("🔎 Ejecutando /grupos en chatId:", chatId);
 
-  const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
-  if (!esAdmin) {
-    return ctx.reply("❌ Solo administradores pueden usar este comando.");
-  }
-
   try {
     const data = fs.readFileSync(FILE_GRUPOS, "utf8");
     const grupos = JSON.parse(data);
 
-    console.log("📂 Grupos cargados desde JSON:", grupos);
-
     const grupoActual = grupos.find(g => String(g.id) === String(chatId));
-    console.log("📋 Resultado búsqueda:", grupoActual);
-
     let mensaje;
     if (grupoActual) {
       mensaje = `✅ El grupo "${ctx.chat.title}" (ID: ${chatId}) está registrado.\n` +
@@ -338,7 +329,7 @@ bot.command('grupos', async (ctx) => {
       mensaje = `⚠️ El grupo "${ctx.chat.title}" (ID: ${chatId}) NO está registrado.`;
     }
 
-    await ctx.reply(mensaje); // 🔎 quitamos autoDelete para ver el mensaje fijo
+    await ctx.reply(mensaje); // 🔎 sin autoDelete
   } catch (err) {
     console.error("❌ Error en /grupos:", err);
     await ctx.reply("❌ Error al leer el archivo de grupos.");
