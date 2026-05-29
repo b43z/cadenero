@@ -277,15 +277,20 @@ bot.on('new_chat_members', async (ctx) => {
 
 // Procesar solicitudes de unión
 bot.on('chat_join_request', async (ctx) => {
-  const chatId = ctx.chat.id;
-  console.log(`📩 Solicitud de unión detectada en grupo ${chatId}`);
+  const chatId = Number(ctx.chat.id); // 🔧 forzar número
+  console.log("📩 Solicitud de unión detectada en grupo:", chatId);
+  console.log("🔎 Grupos autorizados actuales:", [...gruposAutorizados]);
+
   if (!gruposAutorizados.has(chatId)) {
     console.warn(`⚠️ Grupo ${chatId} no está en gruposAutorizados, solicitud no procesada.`);
     return autoDelete(ctx, ctx.reply("⚠️ Este grupo aún no está autorizado. Ingresa la contraseña."));
   }
+
   const user = ctx.chatJoinRequest.from;
+  console.log("👤 Usuario en espera:", user.id, user.first_name, user.username);
   await procesarUsuario(ctx, user, 'solicitud');
 });
+
 
 // --- BLOQUE 8: Comandos administrativos ---
 // Comando /delgrupo <id>
