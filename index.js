@@ -214,11 +214,6 @@ bot.on('message', async (ctx) => {
     }
   }
 });
-      autoDelete(ctx, ctx.reply("❌ Contraseña incorrecta. El bot se eliminará en 10 minutos si no se autoriza."));
-      intentosFallidos.set(chatId, (intentosFallidos.get(chatId) || 0) + 1);
-    }
-  }
-});
 // --- BLOQUE 8: Comandos administrativos ---
 // Comando /delgrupo <id>
 bot.command('delgrupo', async (ctx) => {
