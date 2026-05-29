@@ -72,6 +72,7 @@ function registrarGrupo(chatId, nombre) {
 }
 // Cargar grupos al iniciar
 // --- BLOQUE 2: Utilidades y validaciones ---
+// --- BLOQUE 2: Utilidades y validaciones ---
 cargarGrupos();
 
 // 🔧 Corrección: asegurar que todos los grupos cargados queden autorizados
@@ -87,6 +88,7 @@ const VALIDACIONES = {
   letrasRepetidas: /(.)\1{2,}/u,
   letraMasSimbolo: /^[A-Za-zÁÉÍÓÚÜÑ][\p{P}\p{S}]$/u
 };
+
 function nombreInvalido(nombre) {
   if (!nombre) return true;
   return (
@@ -164,6 +166,7 @@ async function procesarUsuario(ctx, user, tipo = 'directo') {
   }
 }
 // --- BLOQUE 4: Middleware y comandos básicos ---
+// --- BLOQUE 4: Middleware y comandos básicos ---
 bot.use((ctx, next) => {
   if (ctx.message && ctx.message.text) {
     const parts = ctx.message.text.split(' ');
@@ -186,12 +189,9 @@ bot.start((ctx) => {
     mensaje += "⚠️ Este grupo aún no está registrado en memoria.";
   }
 
-  // Si quieres que el mensaje se borre al minuto:
-  // autoDelete(ctx, ctx.reply(mensaje));
-
-  // Si quieres que el mensaje permanezca:
-  ctx.reply(mensaje);
+  ctx.reply(mensaje); // ✅ no usar autoDelete aquí
 });
+
 
 // --- BLOQUE 5: Manejo de entrada/salida del bot ---
 bot.on('my_chat_member', async (ctx) => {
@@ -290,8 +290,6 @@ bot.on('chat_join_request', async (ctx) => {
   console.log("👤 Usuario en espera:", user.id, user.first_name, user.username);
   await procesarUsuario(ctx, user, 'solicitud');
 });
-
-
 // --- BLOQUE 8: Comandos administrativos ---
 // Comando /delgrupo <id>
 bot.command('delgrupo', async (ctx) => {
