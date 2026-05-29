@@ -313,17 +313,35 @@ bot.command('auth', async (ctx) => {
 // Comando /grupos simplificado
 // ---Comando /grupos corregido ---
 bot.command('grupos', async (ctx) => {
-  console.log("🔎 Comando /grupos recibido en chatId:", ctx.chat.id);
-  await ctx.reply("📋 El comando /grupos fue recibido correctamente.");
-});
-// --- BLOQUE 9: Lanzamiento y cierre del bot ---
-bot.launch()
-  .then(() => console.log("✅ Bot iniciado en Railway."))
-  .catch((err) => {
-    console.error("❌ Error al iniciar:", err);
-    // No usamos process.exit(1) para evitar bucles en Railway
-  });
+  console.log("🚀 Entró al comando /grupos en chatId:", ctx.chat.id);
 
+  try {
+    const data = fs.readFileSync(FILE_GRUPOS, "utf8");
+    console.log("📂 Contenido bruto del archivo:", data);
+
+    const grupos = JSON.parse(data);
+    console.log("📋 Grupos parseados:", grupos);
+
+    // Convertir chatId a número para evitar BigInt vs Number
+    const chatIdNum = Number(ctx.chat.id);
+    const grupoActual = grupos.find(g => Number(g.id) === chatIdNum);
+    console.log("🔎 Resultado búsqueda:", grupoActual);
+
+    let mensaje;
+    if (grupoActual) {
+      mensaje = `✅ El grupo "${ctx.chat.title}" (ID: ${chatIdNum}) está registrado.\n` +
+                `Procesados: ${grupoActual.usuariosProcesados} | Rechazados: ${grupoActual.usuariosRechazados}`;
+    } else {
+      mensaje = `⚠️ El grupo "${ctx.chat.title}" (ID: ${chatIdNum}) NO está registrado.`;
+    }
+
+    console.log("📤 Mensaje a enviar:", mensaje);
+    await ctx.reply(mensaje);
+  } catch (err) {
+    console.error("❌ Error en /grupos:", err);
+    await ctx.reply("❌ Error al leer el archivo de grupos.");
+  }
+});
 // Graceful stop
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
