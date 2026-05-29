@@ -304,23 +304,22 @@ bot.command('auth', async (ctx) => {
 
 // Comando /grupos
 bot.command('grupos', async (ctx) => {
-  const chatId = ctx.chat.id;
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) return autoDelete(ctx, ctx.reply("❌ Solo administradores pueden usar este comando."));
 
-  if (gruposAutorizados.has(chatId) && !gruposActivos.has(chatId)) {
-    registrarGrupo(chatId, ctx.chat.title);
-    guardarGrupos();
-  }
+  // Siempre recargar desde JSON antes de mostrar
+  cargarGrupos();
 
-  if (gruposActivos.size === 0) cargarGrupos();
-  if (gruposActivos.size === 0) return autoDelete(ctx, ctx.reply("⚠️ No hay grupos registrados."));
+  if (gruposActivos.size === 0) {
+    return autoDelete(ctx, ctx.reply("⚠️ No hay grupos registrados en memoria ni en JSON."));
+  }
 
   let mensaje = "📋 Lista de grupos registrados:\n\n";
   for (const [id, grupo] of gruposActivos.entries()) {
     const autorizado = gruposAutorizados.has(id) ? "✅ Autorizado" : "⏳ Pendiente";
     mensaje += `• ${grupo.nombre} (ID: ${id}) → ${autorizado}\n`;
   }
+
   autoDelete(ctx, ctx.reply(mensaje));
 });
 
