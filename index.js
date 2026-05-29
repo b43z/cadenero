@@ -283,12 +283,21 @@ bot.command('auth', async (ctx) => {
   const passwordIngresado = ctx.args[0].trim();
   if (passwordIngresado === BOT_PASSWORD) {
     gruposAutorizados.add(chatId);
+
+    // 🔧 Registrar el grupo al autorizar para que aparezca en /grupos
+    registrarGrupo(chatId, ctx.chat.title);
+
     gruposPendientes.delete(chatId);
     intentosFallidos.delete(chatId);
     guardarGrupos();
+
+    // Borrar el mensaje con la contraseña
+    ctx.deleteMessage(ctx.message.message_id).catch(() => {});
+
     autoDelete(ctx, ctx.reply("✅ Grupo autorizado correctamente."));
     console.log(`🔑 Grupo autorizado vía /auth: ${ctx.chat.title} (${chatId})`);
   } else {
+    ctx.deleteMessage(ctx.message.message_id).catch(() => {});
     autoDelete(ctx, ctx.reply("❌ Contraseña incorrecta."));
     intentosFallidos.set(chatId, (intentosFallidos.get(chatId) || 0) + 1);
   }
