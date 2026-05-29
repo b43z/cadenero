@@ -5,7 +5,7 @@ const BOT_TOKEN = process.env.BOT_TOKEN;
 const FILE_GRUPOS = "gruposActivos.json";
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const BOT_PASSWORD = process.env.BOT_PASSWORD || 'b43z6028-cirrus';
-const bot = new Telegraf(BOT_TOKEN);
+
 
 // Estado en memoria
 const usuariosProcesados = new Set();
