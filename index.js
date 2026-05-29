@@ -73,18 +73,6 @@ function registrarGrupo(chatId, nombre) {
 // Cargar grupos al iniciar
 // --- BLOQUE 2: Utilidades y validaciones ---
 cargarGrupos();
-
-// 🔧 Corrección: asegurar que todos los grupos cargados queden autorizados
-// --- BLOQUE 2: Utilidades y validaciones ---
-cargarGrupos();
-
-// 🔧 Forzar que todos los IDs sean número
-for (const [id] of gruposActivos.entries()) {
-  gruposAutorizados.add(Number(id));
-}
-
-console.log("🔎 Grupos autorizados tras cargar archivo:", [...gruposAutorizados]);
-
 const VALIDACIONES = {
   soloSimbolos: /^[\p{P}\p{S}]+$/u,
   unaLetra: /^[A-Za-zÁÉÍÓÚÜÑ]$/u,
@@ -178,25 +166,8 @@ bot.use((ctx, next) => {
 });
 
 bot.start((ctx) => {
-  console.log("🚀 Comando /start recibido en chat:", ctx.chat.id, ctx.chat.title);
-
   registrarGrupo(ctx.chat.id, ctx.chat.title);
-
-  const grupo = gruposActivos.get(ctx.chat.id);
-  let mensaje = `⚡ Bot activado en el grupo "${ctx.chat.title}" (ID: ${ctx.chat.id}).\n`;
-
-  if (grupo) {
-    mensaje += `📊 Usuarios procesados: ${grupo.usuariosProcesados}\n`;
-    mensaje += `🚫 Usuarios rechazados: ${grupo.usuariosRechazados}\n`;
-    mensaje += `📅 Fecha de inicio: ${grupo.fechaInicio}`;
-  } else {
-    mensaje += "⚠️ Este grupo aún no está registrado en memoria.";
-  }
-
-  // ✅ Importante: usar ctx.reply directamente, no autoDelete
-  ctx.reply(mensaje).catch(err => {
-    console.error("❌ Error al enviar mensaje de /start:", err);
-  });
+  autoDelete(ctx, ctx.reply("⚡ Bot activado. Evaluará automáticamente a los nuevos usuarios."));
 });
 // --- BLOQUE 5: Manejo de entrada/salida del bot ---
 bot.on('my_chat_member', async (ctx) => {
@@ -282,25 +253,16 @@ bot.on('new_chat_members', async (ctx) => {
 
 // Procesar solicitudes de unión
 bot.on('chat_join_request', async (ctx) => {
-  const chatId = Number(ctx.chat.id); // 🔧 forzar número
-  console.log("📩 Solicitud de unión detectada en grupo:", chatId);
-  console.log("🔎 Grupos autorizados actuales:", [...gruposAutorizados]);
-
+  const chatId = ctx.chat.id;
+  console.log(`📩 Solicitud de unión detectada en grupo ${chatId}`);
   if (!gruposAutorizados.has(chatId)) {
     console.warn(`⚠️ Grupo ${chatId} no está en gruposAutorizados, solicitud no procesada.`);
-    return ctx.reply("⚠️ Este grupo aún no está autorizado. Ingresa la contraseña.");
+    return autoDelete(ctx, ctx.reply("⚠️ Este grupo aún no está autorizado. Ingresa la contraseña."));
   }
-
   const user = ctx.chatJoinRequest.from;
-  console.log("👤 Usuario en espera:", user.id, user.first_name, user.username);
-
-  try {
-    await procesarUsuario(ctx, user, 'solicitud');
-    console.log(`✅ Usuario ${user.id} procesado correctamente`);
-  } catch (err) {
-    console.error("❌ Error al procesar usuario:", err);
-  }
+  await procesarUsuario(ctx, user, 'solicitud');
 });
+
 // --- BLOQUE 8: Comandos administrativos ---
 // Comando /delgrupo <id>
 bot.command('delgrupo', async (ctx) => {
