@@ -302,6 +302,7 @@ bot.command('auth', async (ctx) => {
 
 // Comando /grupos (lee directamente el JSON)
 bot.command('grupos', async (ctx) => {
+  const chatId = ctx.chat.id;
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) {
     return autoDelete(ctx, ctx.reply("❌ Solo administradores pueden usar este comando."));
@@ -320,11 +321,15 @@ bot.command('grupos', async (ctx) => {
       return autoDelete(ctx, ctx.reply("⚠️ No hay grupos registrados en el archivo JSON."));
     }
 
-    let mensaje = "📋 Lista de grupos registrados:\n\n";
-    grupos.forEach(grupo => {
-      mensaje += `• ${grupo.nombre} (ID: ${grupo.id})\n`;
-      mensaje += `   Procesados: ${grupo.usuariosProcesados} | Rechazados: ${grupo.usuariosRechazados}\n\n`;
-    });
+    // 🔎 Verificar si el grupo actual está registrado
+    const grupoActual = grupos.find(g => g.id === chatId);
+    let mensaje;
+    if (grupoActual) {
+      mensaje = `✅ El grupo "${ctx.chat.title}" (ID: ${chatId}) está registrado y funcionando.\n` +
+                `Procesados: ${grupoActual.usuariosProcesados} | Rechazados: ${grupoActual.usuariosRechazados}`;
+    } else {
+      mensaje = `⚠️ El grupo "${ctx.chat.title}" (ID: ${chatId}) NO está registrado.`;
+    }
 
     autoDelete(ctx, ctx.reply(mensaje));
   } catch (err) {
