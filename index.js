@@ -332,8 +332,8 @@ bot.command('grupos', async (ctx) => {
       return autoDelete(ctx, ctx.reply("⚠️ No hay grupos registrados en el archivo JSON. Este grupo NO está registrado."));
     }
 
-    // 🔎 Comparación corregida: convertir ambos a número
-    const grupoActual = grupos.find(g => Number(g.id) === Number(chatId));
+    // 🔎 Comparación corregida: convertir ambos a string
+    const grupoActual = grupos.find(g => String(g.id) === String(chatId));
 
     let mensaje;
     if (grupoActual) {
