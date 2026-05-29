@@ -305,13 +305,15 @@ bot.command('auth', async (ctx) => {
 // Comando /grupos
 bot.command('grupos', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
-  if (!esAdmin) return autoDelete(ctx, ctx.reply("❌ Solo administradores pueden usar este comando."));
+  if (!esAdmin) {
+    return autoDelete(ctx, ctx.reply("❌ Solo administradores pueden usar este comando."));
+  }
 
-  // Siempre recargar desde JSON antes de mostrar
+  // 🔄 Siempre recargar desde JSON antes de mostrar
   cargarGrupos();
 
   if (gruposActivos.size === 0) {
-    return autoDelete(ctx, ctx.reply("⚠️ No hay grupos registrados en memoria ni en JSON."));
+    return autoDelete(ctx, ctx.reply("⚠️ No hay grupos registrados en el archivo JSON."));
   }
 
   let mensaje = "📋 Lista de grupos registrados:\n\n";
