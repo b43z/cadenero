@@ -72,7 +72,6 @@ function registrarGrupo(chatId, nombre) {
 }
 // Cargar grupos al iniciar
 // --- BLOQUE 2: Utilidades y validaciones ---
-// --- BLOQUE 2: Utilidades y validaciones ---
 cargarGrupos();
 
 // 🔧 Corrección: asegurar que todos los grupos cargados queden autorizados
@@ -170,7 +169,6 @@ async function procesarUsuario(ctx, user, tipo = 'directo') {
   }
 }
 // --- BLOQUE 4: Middleware y comandos básicos ---
-// --- BLOQUE 4: Middleware y comandos básicos ---
 bot.use((ctx, next) => {
   if (ctx.message && ctx.message.text) {
     const parts = ctx.message.text.split(' ');
@@ -180,6 +178,8 @@ bot.use((ctx, next) => {
 });
 
 bot.start((ctx) => {
+  console.log("🚀 Comando /start recibido en chat:", ctx.chat.id, ctx.chat.title);
+
   registrarGrupo(ctx.chat.id, ctx.chat.title);
 
   const grupo = gruposActivos.get(ctx.chat.id);
@@ -193,9 +193,11 @@ bot.start((ctx) => {
     mensaje += "⚠️ Este grupo aún no está registrado en memoria.";
   }
 
-  ctx.reply(mensaje); // ✅ no usar autoDelete aquí
+  // ✅ Importante: usar ctx.reply directamente, no autoDelete
+  ctx.reply(mensaje).catch(err => {
+    console.error("❌ Error al enviar mensaje de /start:", err);
+  });
 });
-
 // --- BLOQUE 5: Manejo de entrada/salida del bot ---
 bot.on('my_chat_member', async (ctx) => {
   const chatId = ctx.chat.id;
