@@ -1,9 +1,11 @@
 // --- BLOQUE 1: Imports, inicialización y persistencia ---
 const { Telegraf } = require('telegraf');
 const fs = require('fs');
+const BOT_TOKEN = process.env.BOT_TOKEN;
 const FILE_GRUPOS = "gruposActivos.json";
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const BOT_PASSWORD = process.env.BOT_PASSWORD || 'b43z6028-cirrus';
+const bot = new Telegraf(BOT_TOKEN);
 
 // Estado en memoria
 const usuariosProcesados = new Set();
@@ -11,7 +13,7 @@ const gruposActivos = new Map();
 const gruposAutorizados = new Set();
 const gruposPendientes = new Map();
 const intentosFallidos = new Map();
-
+ntentosFallidos = new Map(); 
 // Función para cargar grupos desde JSON
 function cargarGrupos() {
   try {
@@ -42,7 +44,6 @@ function cargarGrupos() {
     console.error("❌ Error al cargar grupos:", err.message);
   }
 }
-
 // Función para guardar grupos en JSON
 function guardarGrupos() {
   try {
@@ -54,6 +55,39 @@ function guardarGrupos() {
   }
 }
 
+// Función para registrar un grupo en memoria y JSON
+function registrarGrupo(chatId, nombre) {
+  if (!gruposActivos.has(chatId)) {
+    gruposActivos.set(chatId, {
+      nombre,
+      usuariosProcesados: 0,
+      usuariosRechazados: 0,
+      fechaInicio: new Date().toISOString(),
+      id: chatId
+    });
+    guardarGrupos();
+    console.log(`📌 Grupo registrado: ${nombre} (${chatId})`);
+  }
+}
+
+// Función auxiliar para borrar mensajes automáticos
+function autoDelete(ctx, promise) {
+  promise.then((msg) => {
+    setTimeout(() => {
+      ctx.deleteMessage(msg.message_id).catch(() => {});
+    }, 10000);
+  });
+}
+
+// Función para verificar si un usuario es admin
+async function esAdminDelGrupo(ctx, userId) {
+  try {
+    const member = await ctx.telegram.getChatMember(ctx.chat.id, userId);
+    return ["administrator", "creator"].includes(member.status);
+  } catch {
+    return false;
+  }
+}
 // Función para registrar un grupo en memoria y JSON
 function registrarGrupo(chatId, nombre) {
   if (!gruposActivos.has(chatId)) {
