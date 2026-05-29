@@ -164,7 +164,6 @@ async function procesarUsuario(ctx, user, tipo = 'directo') {
     await autoDelete(ctx, ctx.reply(`❌ Error al procesar ${nombre}: ${err.message}`));
   }
 }
-js
 // --- BLOQUE 4: Middleware y comandos básicos ---
 bot.use((ctx, next) => {
   if (ctx.message && ctx.message.text) {
