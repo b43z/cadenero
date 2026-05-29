@@ -314,40 +314,34 @@ bot.command('auth', async (ctx) => {
 // ---Comando /grupos corregido ---
 bot.command('grupos', async (ctx) => {
   const chatId = ctx.chat.id;
+  console.log("🔎 Ejecutando /grupos en chatId:", chatId);
+
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) {
-    return autoDelete(ctx, ctx.reply("❌ Solo administradores pueden usar este comando."));
+    return ctx.reply("❌ Solo administradores pueden usar este comando.");
   }
 
   try {
     const data = fs.readFileSync(FILE_GRUPOS, "utf8");
-
-    if (!data || data.trim().length === 0) {
-      return autoDelete(ctx, ctx.reply("⚠️ El archivo de grupos está vacío. Este grupo NO está registrado."));
-    }
-
     const grupos = JSON.parse(data);
 
-    if (!Array.isArray(grupos) || grupos.length === 0) {
-      return autoDelete(ctx, ctx.reply("⚠️ No hay grupos registrados en el archivo JSON. Este grupo NO está registrado."));
-    }
+    console.log("📂 Grupos cargados desde JSON:", grupos);
 
-    // 🔎 Comparación corregida: convertir ambos a string
     const grupoActual = grupos.find(g => String(g.id) === String(chatId));
+    console.log("📋 Resultado búsqueda:", grupoActual);
 
     let mensaje;
     if (grupoActual) {
-      mensaje = `✅ El grupo "${ctx.chat.title}" (ID: ${chatId}) está registrado y funcionando.\n` +
+      mensaje = `✅ El grupo "${ctx.chat.title}" (ID: ${chatId}) está registrado.\n` +
                 `Procesados: ${grupoActual.usuariosProcesados} | Rechazados: ${grupoActual.usuariosRechazados}`;
     } else {
       mensaje = `⚠️ El grupo "${ctx.chat.title}" (ID: ${chatId}) NO está registrado.`;
     }
 
-    console.log("📋 /grupos →", mensaje); // Diagnóstico en consola
-    autoDelete(ctx, ctx.reply(mensaje));
+    await ctx.reply(mensaje); // 🔎 quitamos autoDelete para ver el mensaje fijo
   } catch (err) {
-    console.error("❌ Error al leer grupos:", err.message);
-    return autoDelete(ctx, ctx.reply("❌ Error al leer el archivo de grupos."));
+    console.error("❌ Error en /grupos:", err);
+    await ctx.reply("❌ Error al leer el archivo de grupos.");
   }
 });
 // --- BLOQUE 9: Lanzamiento y cierre del bot ---
