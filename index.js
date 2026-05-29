@@ -310,6 +310,7 @@ bot.command('auth', async (ctx) => {
 });
 
 // Comando /grupos simplificado
+// --- BLOQUE 8: Comando /grupos corregido ---
 bot.command('grupos', async (ctx) => {
   const chatId = ctx.chat.id;
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
@@ -330,6 +331,7 @@ bot.command('grupos', async (ctx) => {
       return autoDelete(ctx, ctx.reply("⚠️ No hay grupos registrados en el archivo JSON. Este grupo NO está registrado."));
     }
 
+    // 🔎 Verificar si el grupo actual está registrado
     const grupoActual = grupos.find(g => Number(g.id) === Number(chatId));
     let mensaje;
     if (grupoActual) {
@@ -339,6 +341,7 @@ bot.command('grupos', async (ctx) => {
       mensaje = `⚠️ El grupo "${ctx.chat.title}" (ID: ${chatId}) NO está registrado.`;
     }
 
+    console.log("📋 Estado del comando /grupos:", mensaje); // Diagnóstico en consola
     autoDelete(ctx, ctx.reply(mensaje));
   } catch (err) {
     console.error("❌ Error al leer grupos:", err.message);
