@@ -72,7 +72,6 @@ function registrarGrupo(chatId, nombre) {
 }
 // Cargar grupos al iniciar
 // --- BLOQUE 2: Utilidades y validaciones ---
-// --- BLOQUE 2: Utilidades y validaciones ---
 cargarGrupos();
 
 // 🔧 Corrección: asegurar que todos los grupos cargados queden autorizados
@@ -165,6 +164,7 @@ async function procesarUsuario(ctx, user, tipo = 'directo') {
     await autoDelete(ctx, ctx.reply(`❌ Error al procesar ${nombre}: ${err.message}`));
   }
 }
+js
 // --- BLOQUE 4: Middleware y comandos básicos ---
 bot.use((ctx, next) => {
   if (ctx.message && ctx.message.text) {
@@ -218,7 +218,6 @@ bot.on('my_chat_member', async (ctx) => {
     console.log(`🗑️ Bot eliminado del grupo: ${chatId}`);
   }
 });
-
 // --- BLOQUE 6: Autenticación de grupos ---
 bot.on('message', async (ctx) => {
   const chatId = ctx.chat.id;
