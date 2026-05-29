@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "nombre": "Prueba",
+    "usuariosProcesados": 0,
+    "usuariosRechazados": 0,
+    "fechaInicio": "2026-05-29T05:00:00.000Z",
+    "id": -1003982874038
+  }
+]
