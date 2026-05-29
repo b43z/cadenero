@@ -336,7 +336,7 @@ bot.command('grupos', async (ctx) => {
     return autoDelete(ctx, ctx.reply("❌ Solo administradores pueden usar este comando."));
   }
 
-  // 🔄 Siempre recargar desde JSON
+  // 🔄 Recargar siempre desde JSON
   cargarGrupos();
 
   if (gruposActivos.size === 0) {
