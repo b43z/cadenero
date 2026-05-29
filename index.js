@@ -72,11 +72,16 @@ function registrarGrupo(chatId, nombre) {
 }
 // Cargar grupos al iniciar
 // --- BLOQUE 2: Utilidades y validaciones ---
+// --- BLOQUE 2: Utilidades y validaciones ---
 cargarGrupos();
+
 // 🔧 Corrección: asegurar que todos los grupos cargados queden autorizados
 for (const [id] of gruposActivos.entries()) {
   gruposAutorizados.add(Number(id));
 }
+
+console.log("🔎 Grupos autorizados tras cargar archivo:", [...gruposAutorizados]);
+
 const VALIDACIONES = {
   soloSimbolos: /^[\p{P}\p{S}]+$/u,
   unaLetra: /^[A-Za-zÁÉÍÓÚÜÑ]$/u,
@@ -169,7 +174,40 @@ bot.use((ctx, next) => {
   return next();
 });
 
+bot.start((ctx) => {
+  registrarGrupo(ctx.chat.id, ctx.chat.title);
 
+  const grupo = gruposActivos.get(ctx.chat.id);
+  let mensaje = `⚡ Bot activado en el grupo "${ctx.chat.title}" (ID: ${ctx.chat.id}).\n`;
+
+  if (grupo) {
+    mensaje += `📊 Usuarios procesados: ${grupo.usuariosProcesados}\n`;
+    mensaje += `🚫 Usuarios rechazados: ${grupo.usuariosRechazados}\n`;
+    mensaje += `📅 Fecha de inicio: ${grupo.fechaInicio}`;
+  } else {
+    mensaje += "⚠️ Este grupo aún no está registrado en memoria.";
+  }
+
+  // Si quieres que el mensaje se borre al minuto:
+  // autoDelete(ctx, ctx.reply(mensaje));
+
+  // Si quieres que el mensaje permanezca:
+  ctx.reply(mensaje);
+});
+
+// --- BLOQUE 5: Manejo de entrada/salida del bot ---
+bot.on('my_chat_member', async (ctx) => {
+  const chatId = ctx.chat.id;
+  const nuevoEstado = ctx.myChatMember.new_chat_member.status;
+  const estadoAnterior = ctx.myChatMember.old_chat_member.status;
+
+  if ((estadoAnterior === 'left' || estadoAnterior === 'kicked' || !estadoAnterior) &&
+      (['member','administrator','creator'].includes(nuevoEstado))) {
+    registrarGrupo(chatId, ctx.chat.title);
+    gruposPendientes.set(chatId, { nombre: ctx.chat.title, fecha_solicitud: new Date() });
+    autoDelete(ctx, ctx.reply("🔐 Este grupo requiere autenticación.\nResponde con la contraseña:", {
+      reply_markup: { force_reply: true, selective: true }
+    }));
   }
 
   if (nuevoEstado === 'left' || nuevoEstado === 'kicked') {
@@ -180,6 +218,7 @@ bot.use((ctx, next) => {
     console.log(`🗑️ Bot eliminado del grupo: ${chatId}`);
   }
 });
+
 // --- BLOQUE 6: Autenticación de grupos ---
 bot.on('message', async (ctx) => {
   const chatId = ctx.chat.id;
