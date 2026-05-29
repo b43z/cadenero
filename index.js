@@ -64,7 +64,6 @@ function registrarGrupo(chatId, nombre) {
     console.log(`📌 Grupo registrado: ${nombre} (${chatId})`);
   }
 }
-
 // Función para cargar grupos desde JSON
 function cargarGrupos() {
   try {
@@ -330,6 +329,7 @@ bot.command('auth', async (ctx) => {
 });
 
 // --- BLOQUE 8: Comando /grupos ---
+// Comando /grupos
 bot.command('grupos', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) {
@@ -337,38 +337,19 @@ bot.command('grupos', async (ctx) => {
   }
 
   // 🔄 Recargar siempre desde JSON
-  try {
-    const data = fs.readFileSync(FILE_GRUPOS, "utf8");
-    if (data.trim().length === 0) {
-      return autoDelete(ctx, ctx.reply("⚠️ El archivo de grupos está vacío."));
-    }
+  cargarGrupos();
 
-    const grupos = JSON.parse(data);
-    gruposActivos.clear();
-    gruposAutorizados.clear();
-
-    grupos.forEach(grupo => {
-      if (grupo.id && grupo.nombre) {
-        gruposActivos.set(grupo.id, grupo);
-        gruposAutorizados.add(grupo.id);
-      }
-    });
-
-    if (gruposActivos.size === 0) {
-      return autoDelete(ctx, ctx.reply("⚠️ No hay grupos registrados en el archivo JSON."));
-    }
-
-    let mensaje = "📋 Lista de grupos registrados:\n\n";
-    for (const [id, grupo] of gruposActivos.entries()) {
-      const autorizado = gruposAutorizados.has(id) ? "✅ Autorizado" : "⏳ Pendiente";
-      mensaje += `• ${grupo.nombre} (ID: ${id}) → ${autorizado}\n`;
-    }
-
-    autoDelete(ctx, ctx.reply(mensaje));
-  } catch (err) {
-    console.error("❌ Error al leer grupos:", err.message);
-    return autoDelete(ctx, ctx.reply("❌ Error al leer el archivo de grupos."));
+  if (gruposActivos.size === 0) {
+    return autoDelete(ctx, ctx.reply("⚠️ No hay grupos registrados en el archivo JSON."));
   }
+
+  let mensaje = "📋 Lista de grupos registrados:\n\n";
+  for (const [id, grupo] of gruposActivos.entries()) {
+    const autorizado = gruposAutorizados.has(id) ? "✅ Autorizado" : "⏳ Pendiente";
+    mensaje += `• ${grupo.nombre} (ID: ${id}) → ${autorizado}\n`;
+  }
+
+  autoDelete(ctx, ctx.reply(mensaje));
 });
 // --- BLOQUE 9: Lanzamiento y cierre del bot ---
 bot.launch()
