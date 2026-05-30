@@ -39,23 +39,11 @@ cargarGrupos();
 // --- BLOQUE 2: Validaciones y utilidades ---
 const VALIDACIONES = {
   soloSimbolos: /^[\p{P}\p{S}]+$/u,
-  unaLetra: /^[A-Za-zÁÉÍÓÚÜÑ]$/u,
   soloEmoji: /^[\p{Emoji}]+$/u,
-  letrasRepetidas: /(.)\1{2,}/u,
-  letraMasSimbolo: /^[A-Za-zÁÉÍÓÚÜÑ][\p{P}\p{S}]$/u,
-  emojiMasSimbolo: /^[\p{Emoji}][\p{P}\p{S}]$/u,
-
-  // Nuevas reglas
+  letrasRepetidas: /(.)\1{3,}/u, // bloquea 3+ repeticiones
   longitudInvalida: /^.{0,1}$|^.{31,}$/u,
-  sinVocales: /^[^AEIOUÁÉÍÓÚaeiouáéíóú]+$/u,
-  consonantesSeguidas: /[bcdfghjklmnñpqrstvwxyz]{4,}/iu,
-  repeticionPatron: /(\w{2,})\1{2,}/u,
-  excesoMayusMinus: /([A-Z][a-z]){3,}|([a-z][A-Z]){3,}/u,
-  demasiadosNumeros: /\d{4,}/u,
   nombresEliminados: /\b(deleted user|usuario eliminado|cuenta eliminada|account deleted|unknown|desconocido)\b/i,
-  caracteresNoLatinos: /[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s\p{S}\p{P}]/u,
-  simbolosDecorativos: /^(?:[\p{S}\p{P}]*[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+[\p{S}\p{P}]*)$/u,
-  excesoSimbolos: /[\p{S}\p{P}]{4,}/u
+  caracteresNoLatinos: /[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]/u
 };
 
 function nombreInvalido(nombre) {
@@ -144,33 +132,40 @@ async function procesarUsuario(ctx, user, tipo = 'directo') {
 
   const nombre = user.first_name || "";
   const username = user.username ? `@${user.username}` : "(sin username)";
-  const esValido = !nombreInvalido(nombre);
+  const esValido = !nombreInvalido(nombre); // ahora solo evalúa el nombre
 
   try {
     if (!esValido) {
-      if (tipo === 'solicitud') await ctx.telegram.declineChatJoinRequest(chatId, userId);
-      else await ctx.telegram.banChatMember(chatId, userId);
-      await autoDelete(ctx, ctx.reply(`🚫 Usuario rechazado: ${nombre} ${username}`));
+      if (tipo === 'solicitud') {
+        await ctx.telegram.declineChatJoinRequest(chatId, userId);
+      } else {
+        await ctx.telegram.banChatMember(chatId, userId);
+      }
+      await autoDelete(ctx, ctx.telegram.sendMessage(chatId, `🚫 Usuario rechazado: ${nombre} ${username}`));
       actualizarGrupo(chatId, false);
     } else {
-      if (tipo === 'solicitud') await ctx.telegram.approveChatJoinRequest(chatId, userId);
+      if (tipo === 'solicitud') {
+        await ctx.telegram.approveChatJoinRequest(chatId, userId);
+      }
 
-      // Mensaje de bienvenida con botón de contingencia Ban
-      await autoDelete(ctx, ctx.reply(
-        `✅ Bienvenido ${nombre} ${username}`,
-        {
-          reply_markup: {
-            inline_keyboard: [
-              [{ text: "🚨 Banear", callback_data: `ban_${userId}` }]
-            ]
+      // Mensaje de bienvenida con botón inline Ban
+      await autoDelete(ctx,
+        ctx.telegram.sendMessage(chatId,
+          `✅ Bienvenido ${nombre} ${username}`,
+          {
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "🚨 Banear", callback_data: `ban_${userId}` }]
+              ]
+            }
           }
-        }
-      ));
+        )
+      );
 
       actualizarGrupo(chatId, true);
     }
   } catch (err) {
-    await autoDelete(ctx, ctx.reply(`❌ Error al procesar ${nombre}: ${err.message}`));
+    await autoDelete(ctx, ctx.telegram.sendMessage(chatId, `❌ Error al procesar ${nombre}: ${err.message}`));
   }
 }
 
