@@ -51,7 +51,7 @@ function nombreInvalido(nombre) {
   return Object.values(VALIDACIONES).some(regex => regex.test(nombre));
 }
 
-// --- AutoDelete mejorado ---
+// --- AutoDelete corregido ---
 async function autoDelete(ctx, messagePromise, delayMs = 7 * 60 * 1000) {
   try {
     const sent = await messagePromise;
@@ -60,16 +60,19 @@ async function autoDelete(ctx, messagePromise, delayMs = 7 * 60 * 1000) {
         await ctx.telegram.deleteMessage(ctx.chat.id, sent.message_id);
         console.log(`🗑️ Mensaje eliminado automáticamente: ${sent.message_id}`);
       } catch (err) {
-        if (err.code === 400 || err.code === 403) {
-          console.warn(`⚠️ No se pudo borrar el mensaje ${sent.message_id}. 
-Posible falta de permisos en el grupo (${ctx.chat.id}).`);
-
-          // Aviso dentro del grupo, también autodestructible en 7 min
+        // Diferenciar tipos de error
+        if (err.code === 403) {
+          // Error real de permisos
+          console.warn(`⚠️ El bot no tiene permisos para borrar mensajes en el grupo (${ctx.chat.id}).`);
           autoDelete(ctx, ctx.reply(
             "⚠️ El bot no tiene permisos para borrar mensajes en este grupo. " +
             "Por favor, otórgale permisos de administrador con 'Eliminar mensajes'."
           ), 7 * 60 * 1000);
+        } else if (err.code === 400 && err.description?.includes("message to delete not found")) {
+          // Mensaje ya no existe, no es problema de permisos
+          console.log(`ℹ️ Mensaje ${sent.message_id} ya no existe, no se pudo borrar.`);
         } else {
+          // Otros errores inesperados
           console.error(`❌ Error inesperado al borrar mensaje ${sent.message_id}:`, err.message);
         }
       }
