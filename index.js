@@ -27,7 +27,6 @@ function cargarGrupos() {
       const data = JSON.parse(fs.readFileSync(FILE_GRUPOS));
       data.forEach(grupo => {
         gruposActivos.set(grupo.id, grupo);
-        // 🔑 Autorizar automáticamente los grupos cargados
         gruposAutorizados.add(grupo.id);
       });
       console.log("📂 gruposActivos cargados y autorizados desde JSON.");
@@ -44,28 +43,51 @@ const VALIDACIONES = {
   soloEmoji: /^[\p{Emoji}]+$/u,
   letrasRepetidas: /(.)\1{2,}/u,
   letraMasSimbolo: /^[A-Za-zÁÉÍÓÚÜÑ][\p{P}\p{S}]$/u,
-  emojiMasSimbolo: /^[\p{Emoji}][\p{P}\p{S}]$/u
+  emojiMasSimbolo: /^[\p{Emoji}][\p{P}\p{S}]$/u,
+
+  // Nuevas reglas
+  longitudInvalida: /^.{0,1}$|^.{31,}$/u,
+  sinVocales: /^[^AEIOUÁÉÍÓÚaeiouáéíóú]+$/u,
+  consonantesSeguidas: /[bcdfghjklmnñpqrstvwxyz]{4,}/iu,
+  repeticionPatron: /(\w{2,})\1{2,}/u,
+  excesoMayusMinus: /([A-Z][a-z]){3,}|([a-z][A-Z]){3,}/u,
+  demasiadosNumeros: /\d{4,}/u,
+  nombresEliminados: /\b(deleted user|usuario eliminado|cuenta eliminada|account deleted|unknown|desconocido)\b/i,
+  caracteresNoLatinos: /[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s\p{S}\p{P}]/u,
+  simbolosDecorativos: /^(?:[\p{S}\p{P}]*[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]+[\p{S}\p{P}]*)$/u,
+  excesoSimbolos: /[\p{S}\p{P}]{4,}/u
 };
+
 function nombreInvalido(nombre) {
   if (!nombre) return true;
-  return (
-    VALIDACIONES.soloSimbolos.test(nombre) ||
-    VALIDACIONES.unaLetra.test(nombre) ||
-    VALIDACIONES.soloEmoji.test(nombre) ||
-    VALIDACIONES.letrasRepetidas.test(nombre) ||
-    VALIDACIONES.letraMasSimbolo.test(nombre) ||
-    VALIDACIONES.emojiMasSimbolo.test(nombre)
-  );
+  return Object.values(VALIDACIONES).some(regex => regex.test(nombre));
 }
 
-async function autoDelete(ctx, messagePromise) {
+// --- AutoDelete mejorado ---
+async function autoDelete(ctx, messagePromise, delayMs = 7 * 60 * 1000) {
   try {
     const sent = await messagePromise;
-    setTimeout(() => {
-      ctx.telegram.deleteMessage(ctx.chat.id, sent.message_id).catch(() => {});
-    }, 5 * 60 * 1000);
+    setTimeout(async () => {
+      try {
+        await ctx.telegram.deleteMessage(ctx.chat.id, sent.message_id);
+        console.log(`🗑️ Mensaje eliminado automáticamente: ${sent.message_id}`);
+      } catch (err) {
+        if (err.code === 400 || err.code === 403) {
+          console.warn(`⚠️ No se pudo borrar el mensaje ${sent.message_id}. 
+Posible falta de permisos en el grupo (${ctx.chat.id}).`);
+
+          // Aviso dentro del grupo, también autodestructible en 7 min
+          autoDelete(ctx, ctx.reply(
+            "⚠️ El bot no tiene permisos para borrar mensajes en este grupo. " +
+            "Por favor, otórgale permisos de administrador con 'Eliminar mensajes'."
+          ), 7 * 60 * 1000);
+        } else {
+          console.error(`❌ Error inesperado al borrar mensaje ${sent.message_id}:`, err.message);
+        }
+      }
+    }, delayMs);
   } catch (err) {
-    console.error("Error al enviar/borrar mensaje:", err.message);
+    console.error("❌ Error al enviar/borrar mensaje:", err.message);
   }
 }
 // --- BLOQUE 3: Registro y actualización de grupos ---
@@ -132,13 +154,26 @@ async function procesarUsuario(ctx, user, tipo = 'directo') {
       actualizarGrupo(chatId, false);
     } else {
       if (tipo === 'solicitud') await ctx.telegram.approveChatJoinRequest(chatId, userId);
-      await autoDelete(ctx, ctx.reply(`✅ Bienvenido ${nombre} ${username}`));
+
+      // Mensaje de bienvenida con botón de contingencia Ban
+      await autoDelete(ctx, ctx.reply(
+        `✅ Bienvenido ${nombre} ${username}`,
+        {
+          reply_markup: {
+            inline_keyboard: [
+              [{ text: "🚨 Banear", callback_data: `ban_${userId}` }]
+            ]
+          }
+        }
+      ));
+
       actualizarGrupo(chatId, true);
     }
   } catch (err) {
     await autoDelete(ctx, ctx.reply(`❌ Error al procesar ${nombre}: ${err.message}`));
   }
 }
+
 // --- BLOQUE 5: Middleware y comando /start ---
 bot.use((ctx, next) => {
   if (ctx.message && ctx.message.text) {
@@ -179,7 +214,7 @@ bot.on('my_chat_member', async (ctx) => {
 bot.on('message', async (ctx) => {
   const chatId = ctx.chat.id;
 
-  if (gruposPendientes.has(chatId) && ctx.message.text) {
+  if (gruposPendientes.has(chatId) && ctx.message.text && ctx.message.reply_to_message) {
     const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
     if (!esAdmin) {
       return autoDelete(ctx, ctx.reply("❌ Solo administradores pueden autorizar el grupo."));
@@ -193,15 +228,11 @@ bot.on('message', async (ctx) => {
       intentosFallidos.delete(chatId);
       guardarGrupos();
 
-      // 🔴 Borrar el mensaje con la contraseña para que no quede visible
       ctx.deleteMessage(ctx.message.message_id).catch(() => {});
-
       autoDelete(ctx, ctx.reply("✅ Grupo autorizado correctamente."));
       console.log(`🔑 Grupo autorizado: ${ctx.chat.title} (${chatId})`);
     } else {
-      // 🔴 También puedes borrar el mensaje incorrecto para que no quede expuesto
       ctx.deleteMessage(ctx.message.message_id).catch(() => {});
-
       autoDelete(ctx, ctx.reply("❌ Contraseña incorrecta. El bot se eliminará en 10 minutos si no se autoriza."));
       intentosFallidos.set(chatId, (intentosFallidos.get(chatId) || 0) + 1);
     }
@@ -298,25 +329,26 @@ bot.command('auth', async (ctx) => {
   }
 });
 
-// Comando /grupos
-bot.command('grupos', async (ctx) => {
-  const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
-  if (!esAdmin) {
-    return autoDelete(ctx, ctx.reply("❌ Solo administradores pueden usar este comando."));
-  }
+// --- BLOQUE EXTRA: Botón de contingencia Ban ---
+bot.on('callback_query', async (ctx) => {
+  const data = ctx.callbackQuery.data;
+  if (data.startsWith("ban_")) {
+    const userId = parseInt(data.split("_")[1]);
+    const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
 
-  if (gruposActivos.size === 0) {
-    return autoDelete(ctx, ctx.reply("⚠️ No hay grupos registrados."));
-  }
+    if (!esAdmin) {
+      return ctx.answerCbQuery("❌ Solo administradores pueden usar este botón.", { show_alert: true });
+    }
 
-  let mensaje = "📋 Lista de grupos registrados:\n\n";
-  for (const [id, grupo] of gruposActivos.entries()) {
-    const autorizado = gruposAutorizados.has(id) ? "✅ Autorizado" : "⏳ Pendiente";
-    mensaje += `• ${grupo.nombre} (ID: ${id}) → ${autorizado}\n`;
+    try {
+      await ctx.telegram.banChatMember(ctx.chat.id, userId);
+      await ctx.editMessageText(`🚨 Usuario baneado por administrador (ID: ${userId}).`);
+    } catch (err) {
+      await ctx.answerCbQuery(`❌ Error al banear: ${err.message}`, { show_alert: true });
+    }
   }
-
-  autoDelete(ctx, ctx.reply(mensaje));
 });
+
 // --- BLOQUE 10: Lanzamiento y cierre del bot ---
 // Lanzar bot en Railway
 bot.launch()
