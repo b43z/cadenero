@@ -21,13 +21,14 @@ function guardarGrupos() {
     console.error("❌ Error al guardar grupos:", err.message);
   }
 }
+
 function cargarGrupos() {
   if (fs.existsSync(FILE_GRUPOS)) {
     try {
       const data = JSON.parse(fs.readFileSync(FILE_GRUPOS));
       data.forEach(grupo => {
         gruposActivos.set(grupo.id, grupo);
-        gruposAutorizados.add(grupo.id);
+        gruposAutorizados.add(grupo.id); // 🔑 asegura que todos los grupos del JSON queden autorizados
       });
       console.log("📂 gruposActivos cargados y autorizados desde JSON.");
     } catch (err) {
@@ -35,22 +36,43 @@ function cargarGrupos() {
     }
   }
 }
+
+// --- Verificación automática de permisos administrativos ---
+async function verificarPermisosAdmin() {
+  for (const [chatId, grupo] of gruposActivos.entries()) {
+    try {
+      const miembro = await bot.telegram.getChatMember(chatId, (await bot.telegram.getMe()).id);
+      if (miembro.status !== 'administrator') {
+        console.warn(`⚠️ El bot está en el grupo ${grupo.nombre} (${chatId}) pero no tiene permisos administrativos.`);
+        await bot.telegram.sendMessage(chatId,
+          "⚠️ El bot necesita permisos de administrador con 'Eliminar mensajes' y 'Banear usuarios' para funcionar correctamente.");
+      } else {
+        console.log(`✅ El bot tiene permisos administrativos en: ${grupo.nombre} (${chatId})`);
+      }
+    } catch (err) {
+      console.error(`❌ Error al verificar permisos en grupo ${chatId}:`, err.message);
+    }
+  }
+}
+
 cargarGrupos();
+verificarPermisosAdmin();
 // --- BLOQUE 2: Validaciones y utilidades ---
 const VALIDACIONES = {
-  soloSimbolos: /^[\p{P}\p{S}]+$/u,
-  soloEmoji: /^[\p{Emoji}]+$/u,
-  letrasRepetidas: /(.)\1{3,}/u, // bloquea 3+ repeticiones
-  longitudInvalida: /^.{0,1}$|^.{31,}$/u,
+  soloSimbolos: /^[\p{P}\p{S}]+$/u,                // solo símbolos
+  soloEmoji: /^[\p{Emoji}]+$/u,                    // solo emojis
+  soloNumeros: /^\d+$/u,                           // solo números
+  letraMasNumeros: /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]\d+$/u, // letra seguida solo de números (ej: a123)
+  letrasRepetidas: /(.)\1{3,}/u,                   // 4+ repeticiones consecutivas
+  longitudInvalida: /^.{0,2}$|^.{31,}$/u,          // menos de 3 o más de 30 caracteres
   nombresEliminados: /\b(deleted user|usuario eliminado|cuenta eliminada|account deleted|unknown|desconocido)\b/i,
-  caracteresNoLatinos: /[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ\s]/u
+  caracteresNoLatinos: /[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ\d\s\p{Emoji}\p{P}\p{S}]/u // bloquea alfabetos raros
 };
 
 function nombreInvalido(nombre) {
   if (!nombre) return true;
   return Object.values(VALIDACIONES).some(regex => regex.test(nombre));
 }
-
 // --- AutoDelete corregido ---
 async function autoDelete(ctx, messagePromise, delayMs = 7 * 60 * 1000) {
   try {
