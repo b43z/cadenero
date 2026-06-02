@@ -302,7 +302,7 @@ bot.command('gban', async (ctx) => {
       const username = args[0].slice(1);
       for (const [chatId] of gruposActivos.entries()) {
         try {
-          const miembro = await ctx.telegram.getChatMember(chatId, ctx.from.id);
+          const miembro = await ctx.telegram.getChatMember(chatId, userId || ctx.from.id);
           if (miembro.user.username === username) {
             userId = miembro.user.id;
             nombreUsuario = miembro.user.first_name || `@${username}`;
@@ -346,16 +346,6 @@ bot.command('gban', async (ctx) => {
       console.error(`❌ Error al banear en grupo ${chatId}:`, err.message);
     }
   }
-
-  // Confirmación en el grupo donde se ejecutó el comando
-  const confirm = await ctx.reply(
-    `🚨 Usuario *${nombreUsuario}* (ID: ${userId}) baneado globalmente.\n📝 Motivo: ${motivo}`,
-    { parse_mode: "Markdown" }
-  );
-
-  setTimeout(() => {
-    ctx.deleteMessage(confirm.message_id).catch(() => {});
-  }, 300000);
 });
 
 // --- BLOQUE 10: Configuración de Webhook para Railway ---
