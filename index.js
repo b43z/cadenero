@@ -26,13 +26,13 @@ function guardarGrupos() {
 
 function cargarGrupos() {
   try {
-    const data = fs.readFileSync("gruposActivos.json", "utf8");
+    const data = fs.readFileSync(FILE_GRUPOS, "utf8");
     const grupos = JSON.parse(data);
 
     grupos.forEach(grupo => {
-      const idNum = Number(grupo.id);
-      gruposActivos.set(idNum, { ...grupo, id: idNum });
-      gruposAutorizados.add(idNum);
+      const idStr = String(grupo.id);
+      gruposActivos.set(idStr, { ...grupo, id: idStr });
+      gruposAutorizados.add(idStr);
     });
 
     console.log("📂 gruposActivos cargados y autorizados desde JSON.");
@@ -55,36 +55,35 @@ function autoDelete(ctx, mensaje) {
     }, 10000);
   });
 }
-// --- BLOQUE 3: Registro y actualización de grupos ---
 function registrarGrupo(chatId, nombre) {
-  const idNum = Number(chatId);
-  if (!gruposActivos.has(idNum)) {
-    gruposActivos.set(idNum, {
+  const idStr = String(chatId);
+  if (!gruposActivos.has(idStr)) {
+    gruposActivos.set(idStr, {
       nombre,
       usuariosProcesados: 0,
       usuariosRechazados: 0,
       fechaInicio: new Date().toISOString(),
-      id: idNum
+      id: idStr
     });
-    gruposAutorizados.add(idNum);
+    gruposAutorizados.add(idStr);
     guardarGrupos();
-    console.log(`✅ Grupo registrado y autorizado: ${nombre} (${idNum})`);
+    console.log(`✅ Grupo registrado y autorizado: ${nombre} (${idStr})`);
   }
 }
 
 function actualizarGrupo(chatId, procesados, rechazados) {
-  const idNum = Number(chatId);
-  if (gruposActivos.has(idNum)) {
-    const grupo = gruposActivos.get(idNum);
+  const idStr = String(chatId);
+  if (gruposActivos.has(idStr)) {
+    const grupo = gruposActivos.get(idStr);
     grupo.usuariosProcesados += procesados;
     grupo.usuariosRechazados += rechazados;
-    gruposActivos.set(idNum, grupo);
+    gruposActivos.set(idStr, grupo);
     guardarGrupos();
   }
 }
 // --- BLOQUE 4: Procesamiento de usuarios ---
 async function procesarUsuario(ctx, user, origen) {
-  const chatId = Number(ctx.chat.id);
+  const chatId = String(ctx.chat.id);
   const grupo = gruposActivos.get(chatId);
   if (!grupo) return;
 
@@ -103,8 +102,9 @@ async function procesarUsuario(ctx, user, origen) {
 // --- BLOQUE 6: Autenticación de grupos ---
 
 // --- BLOQUE 7: Limpieza de grupos ---
+// --- BLOQUE 7: Limpieza de grupos ---
 bot.command('delgrupo', async (ctx) => {
-  const chatId = Number(ctx.chat.id);
+  const chatId = String(ctx.chat.id);
   if (gruposActivos.has(chatId)) {
     gruposActivos.delete(chatId);
     gruposAutorizados.delete(chatId);
@@ -116,39 +116,17 @@ bot.command('delgrupo', async (ctx) => {
 });
 // --- BLOQUE 8: Comandos administrativos ---
 // Comando START
-bot.start((ctx) => {
-  const chatId = Number(ctx.chat.id);
-  if (gruposAutorizados.has(chatId)) {
-    const grupo = gruposActivos.get(chatId);
-    return ctx.reply(
-      `👋 Hola, este bot está activo en el grupo *${grupo?.nombre || "Sin nombre"}*.\n\n` +
-      `📊 Usuarios procesados: ${grupo?.usuariosProcesados}\n` +
-      `🚫 Usuarios rechazados: ${grupo?.usuariosRechazados}`
-    );
+// --- BLOQUE 7: Limpieza de grupos ---
+bot.command('delgrupo', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  if (gruposActivos.has(chatId)) {
+    gruposActivos.delete(chatId);
+    gruposAutorizados.delete(chatId);
+    guardarGrupos();
+    return ctx.reply("🗑️ Grupo eliminado de la lista de autorizados.");
   } else {
-    return ctx.reply("⚠️ Este grupo no está en la lista de autorizados.");
+    return ctx.reply("⚠️ Este grupo no estaba autorizado.");
   }
-});
-bot.command('stats', async (ctx) => {
-  const chatId = Number(ctx.chat.id);
-  const grupo = gruposActivos.get(chatId);
-  if (!grupo) return ctx.reply("⚠️ Grupo no autorizado.");
-
-  return ctx.reply(
-    `📊 Estadísticas del grupo:\n` +
-    `Usuarios procesados: ${grupo.usuariosProcesados}\n` +
-    `Usuarios rechazados: ${grupo.usuariosRechazados}\n` +
-    `Fecha inicio: ${grupo.fechaInicio}`
-  );
-});
-
-bot.command('grupos', async (ctx) => {
-  if (gruposActivos.size === 0) return ctx.reply("⚠️ No hay grupos autorizados.");
-  let mensaje = "📋 Lista de grupos autorizados:\n";
-  gruposActivos.forEach(grupo => {
-    mensaje += `- ${grupo.nombre} (ID: ${grupo.id})\n`;
-  });
-  return ctx.reply(mensaje);
 });
 // --- BLOQUE 9: GBAN y funciones auxiliares ---
 async function esAdminDelGrupo(ctx, userId) {
