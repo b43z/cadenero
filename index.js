@@ -140,13 +140,14 @@ async function procesarUsuario(ctx, user, origen) {
   if (nombreInvalido(user.first_name)) {
     await ctx.kickChatMember(user.id);
     actualizarGrupo(chatId, 0, 1);
-    console.log(`❌ Usuario rechazado: ${user.first_name}`);
+    console.log(`❌ Usuario rechazado: ${user.first_name} (${user.id})`);
   } else {
     usuariosProcesados.add(user.id);
     actualizarGrupo(chatId, 1, 0);
-    console.log(`✅ Usuario procesado: ${user.first_name}`);
+    console.log(`✅ Usuario procesado: ${user.first_name} (${user.id})`);
   }
 }
+
 // --- BLOQUE 4B: Manejo de solicitudes de unión con mensajes y botón Ban ---
 bot.on('chat_join_request', async (ctx) => {
   const chatId = String(ctx.chat.id);
@@ -164,35 +165,40 @@ bot.on('chat_join_request', async (ctx) => {
     // Rechazar solicitud
     await ctx.declineChatJoinRequest(user.id);
     actualizarGrupo(chatId, 0, 1);
-    console.log(`❌ Solicitud rechazada: ${user.first_name}`);
+    console.log(`❌ Solicitud rechazada: ${user.first_name} (${user.id})`);
 
     // Mensaje de rechazo con botón Ban
-    await ctx.telegram.sendMessage(chatId, `🚫 Usuario *${user.first_name}* fue rechazado por nombre inválido.`, {
-      parse_mode: "Markdown",
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "🚨 Banear", callback_data: `ban_${user.id}` }]
-        ]
+    await ctx.telegram.sendMessage(chatId, 
+      `🚫 Usuario *${user.first_name}* (${user.id}) fue rechazado por nombre inválido.`, {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "🚨 Banear", callback_data: `ban_${user.id}` }]
+          ]
+        }
       }
-    });
+    );
   } else {
     // Aceptar solicitud
     await ctx.approveChatJoinRequest(user.id);
     usuariosProcesados.add(user.id);
     actualizarGrupo(chatId, 1, 0);
-    console.log(`✅ Solicitud aprobada: ${user.first_name}`);
+    console.log(`✅ Solicitud aprobada: ${user.first_name} (${user.id})`);
 
     // Mensaje de bienvenida con botón Ban
-    await ctx.telegram.sendMessage(chatId, `👋 Bienvenido *${user.first_name}* al grupo *${grupo.nombre}*!`, {
-      parse_mode: "Markdown",
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "🚨 Banear", callback_data: `ban_${user.id}` }]
-        ]
+    await ctx.telegram.sendMessage(chatId, 
+      `👋 Bienvenido *${user.first_name}* (${user.id}) al grupo *${grupo.nombre}*!`, {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "🚨 Banear", callback_data: `ban_${user.id}` }]
+          ]
+        }
       }
-    });
+    );
   }
 });
+
 
 // --- BLOQUE EXTRA: Callback del botón Ban ---
 bot.on('callback_query', async (ctx) => {
