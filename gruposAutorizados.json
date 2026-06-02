@@ -19,5 +19,12 @@
     "fechaInicio": "2026-05-29T04:00:00.000Z",
     "usuariosProcesados": 0,
     "usuariosRechazados": 0
+  },
+  {
+    "id": -1003982874038,
+    "nombre": "Prueba",
+    "fechaInicio": "2026-06-02T00:00:00.000Z",
+    "usuariosProcesados": 0,
+    "usuariosRechazados": 0
   }
 ]
