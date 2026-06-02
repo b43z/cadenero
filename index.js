@@ -282,17 +282,59 @@ async function esAdminDelGrupo(ctx, userId) {
 }
 
 bot.command('gban', async (ctx) => {
-  const args = ctx.message.text.split(" ").slice(1);
-  const userId = Number(args[0]);
-  if (!userId) return ctx.reply("⚠️ Debes indicar el ID del usuario.");
-
-  try {
-    await ctx.kickChatMember(userId);
-    ctx.reply(`🚫 Usuario ${userId} baneado globalmente.`);
-  } catch (err) {
-    ctx.reply("❌ Error al banear usuario: " + err.message);
+  const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
+  if (!esAdmin) {
+    return ctx.reply("❌ Solo los administradores pueden usar este comando.");
   }
+
+  const args = ctx.message.text.split(" ").slice(1);
+  let userId;
+
+  // 1️⃣ Si se responde a un mensaje
+  if (ctx.message.reply_to_message) {
+    userId = ctx.message.reply_to_message.from.id;
+  } else if (args[0]) {
+    // 2️⃣ Si es ID numérico
+    if (/^\d+$/.test(args[0])) {
+      userId = Number(args[0]);
+    }
+    // 3️⃣ Si es @usuario
+    else if (args[0].startsWith("@")) {
+      const username = args[0].slice(1);
+      for (const [chatId] of gruposActivos.entries()) {
+        try {
+          const miembro = await ctx.telegram.getChatMember(chatId, ctx.from.id);
+          if (miembro.user.username === username) {
+            userId = miembro.user.id;
+            break;
+          }
+        } catch {
+          // Ignorar errores si el usuario no está en ese grupo
+        }
+      }
+      if (!userId) {
+        return ctx.reply(`⚠️ No se pudo resolver el usuario ${args[0]} en los grupos activos.`);
+      }
+    }
+  }
+
+  if (!userId) {
+    return ctx.reply("⚠️ Uso: `/gban <id_usuario | @usuario>` o responde al mensaje del usuario.", { parse_mode: "Markdown" });
+  }
+
+  // 🚨 Ban global en todos los grupos activos
+  for (const [chatId, grupo] of gruposActivos.entries()) {
+    try {
+      await ctx.telegram.banChatMember(chatId, userId);
+      console.log(`🚨 Usuario ${userId} baneado en grupo: ${grupo.nombre} (${chatId})`);
+    } catch (err) {
+      console.error(`❌ Error al banear en grupo ${chatId}:`, err.message);
+    }
+  }
+
+  await ctx.reply(`🚨 Usuario ${userId} baneado globalmente por administrador.`);
 });
+
 // --- BLOQUE 10: Configuración de Webhook para Railway ---
 const PORT = process.env.PORT || 3000;
 const URL = process.env.WEBHOOK_URL; // ej: https://cadenero-production.up.railway.app
