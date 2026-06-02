@@ -289,28 +289,18 @@ bot.command('gban', async (ctx) => {
 
   const args = ctx.message.text.split(" ").slice(1);
   let userId, motivo = "Sin motivo especificado";
-  let nombreUsuario = "(desconocido)";
+  let username = "";
 
-  // 1️⃣ Resolver usuario
+  // 1️⃣ Si se responde a un mensaje
   if (ctx.message.reply_to_message) {
-    userId = ctx.message.reply_to_message.from.id;
-    nombreUsuario = ctx.message.reply_to_message.from.first_name || "(sin nombre)";
+    const target = ctx.message.reply_to_message.from;
+    userId = target.id;
+    username = target.username ? `@${target.username}` : "";
   } else if (args[0]) {
     if (/^\d+$/.test(args[0])) {
       userId = Number(args[0]);
     } else if (args[0].startsWith("@")) {
-      const username = args[0].slice(1);
-      // Buscar en todos los grupos activos
-      for (const [chatId] of gruposActivos.entries()) {
-        try {
-          const miembro = await ctx.telegram.getChatMember(chatId, ctx.from.id);
-          if (miembro.user.username === username) {
-            userId = miembro.user.id;
-            nombreUsuario = miembro.user.first_name || `@${username}`;
-            break;
-          }
-        } catch {}
-      }
+      username = args[0];
     }
   }
 
@@ -323,12 +313,12 @@ bot.command('gban', async (ctx) => {
   for (const [chatId, grupo] of gruposActivos.entries()) {
     try {
       await ctx.telegram.banChatMember(chatId, userId);
-      console.log(`🚨 Usuario ${nombreUsuario} (${userId}) baneado en grupo: ${grupo.nombre} (${chatId})`);
+      console.log(`🚨 Usuario ${userId} baneado en grupo: ${grupo.nombre} (${chatId})`);
 
-      // Mensaje en cada grupo con datos completos
+      // Mensaje en cada grupo con etiqueta "GBAN de Federación"
       const sent = await ctx.telegram.sendMessage(
         chatId,
-        `🚨 Usuario *${nombreUsuario}*\n🆔 ID Usuario: ${userId}\n🏷️ Grupo: ${grupo.nombre} (ID: ${chatId})\n📝 Motivo: ${motivo}`,
+        `🚨 *GBAN de Federación*\n🆔 ID Usuario: ${userId} ${username}\n🏷️ Grupo: ${grupo.nombre} (ID: ${chatId})\n📝 Motivo: ${motivo}`,
         { parse_mode: "Markdown" }
       );
 
