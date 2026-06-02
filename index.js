@@ -115,6 +115,20 @@ bot.command('delgrupo', async (ctx) => {
   }
 });
 // --- BLOQUE 8: Comandos administrativos ---
+// Comando START
+bot.start((ctx) => {
+  const chatId = Number(ctx.chat.id);
+  if (gruposAutorizados.has(chatId)) {
+    const grupo = gruposActivos.get(chatId);
+    return ctx.reply(
+      `👋 Hola, este bot está activo en el grupo *${grupo?.nombre || "Sin nombre"}*.\n\n` +
+      `📊 Usuarios procesados: ${grupo?.usuariosProcesados}\n` +
+      `🚫 Usuarios rechazados: ${grupo?.usuariosRechazados}`
+    );
+  } else {
+    return ctx.reply("⚠️ Este grupo no está en la lista de autorizados.");
+  }
+});
 bot.command('stats', async (ctx) => {
   const chatId = Number(ctx.chat.id);
   const grupo = gruposActivos.get(chatId);
