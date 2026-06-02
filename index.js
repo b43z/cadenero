@@ -102,7 +102,6 @@ async function procesarUsuario(ctx, user, origen) {
 // --- BLOQUE 6: Autenticación de grupos ---
 
 // --- BLOQUE 7: Limpieza de grupos ---
-// --- BLOQUE 7: Limpieza de grupos ---
 bot.command('delgrupo', async (ctx) => {
   const chatId = String(ctx.chat.id);
   if (gruposActivos.has(chatId)) {
@@ -116,6 +115,21 @@ bot.command('delgrupo', async (ctx) => {
 });
 // --- BLOQUE 8: Comandos administrativos ---
 // Comando START
+bot.start((ctx) => {
+  const chatId = String(ctx.chat.id);
+  console.log("➡️ /start recibido en chat:", chatId);
+
+  if (gruposAutorizados.has(chatId)) {
+    const grupo = gruposActivos.get(chatId);
+    return ctx.reply(
+      `👋 Hola, este bot está activo en el grupo *${grupo?.nombre || "Sin nombre"}*.\n\n` +
+      `📊 Usuarios procesados: ${grupo?.usuariosProcesados}\n` +
+      `🚫 Usuarios rechazados: ${grupo?.usuariosRechazados}`
+    );
+  } else {
+    return ctx.reply("⚠️ Este grupo no está en la lista de autorizados.");
+  }
+});
 // --- BLOQUE 7: Limpieza de grupos ---
 bot.command('delgrupo', async (ctx) => {
   const chatId = String(ctx.chat.id);
