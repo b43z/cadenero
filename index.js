@@ -1,16 +1,8 @@
 // --- BLOQUE 1: Imports, inicialización y persistencia ---
 const { Telegraf } = require('telegraf');
 const fs = require('fs');
-const emojiRegex = require('emoji-regex');
-
-// Validación de variables de entorno
-if (!process.env.BOT_TOKEN || !process.env.BOT_PASSWORD) {
-  console.error("❌ BOT_TOKEN o BOT_PASSWORD no definidos en variables de entorno.");
-  process.exit(1);
-}
-
 const bot = new Telegraf(process.env.BOT_TOKEN);
-const BOT_PASSWORD = process.env.BOT_PASSWORD;
+const BOT_PASSWORD = process.env.BOT_PASSWORD || 'b43z6028-cirrus';
 
 // Estado en memoria
 const usuariosProcesados = new Set();
@@ -23,15 +15,10 @@ const intentosFallidos = new Map();
 const FILE_GRUPOS = 'gruposActivos.json';
 function guardarGrupos() {
   try {
-    const data = [...gruposActivos.values()].map(g => ({
-      ...g,
-      id: Number(g.id),
-      fechaInicio: g.fechaInicio instanceof Date ? g.fechaInicio.toISOString() : g.fechaInicio
-    }));
-    fs.writeFileSync(FILE_GRUPOS, JSON.stringify(data, null, 2));
+    fs.writeFileSync(FILE_GRUPOS, JSON.stringify([...gruposActivos.values()], null, 2));
     console.log("💾 gruposActivos guardados en JSON.");
   } catch (err) {
-    console.error("❌ Error al guardar grupos:", err);
+    console.error("❌ Error al guardar grupos:", err.message);
   }
 }
 
@@ -40,36 +27,31 @@ function cargarGrupos() {
     try {
       const data = JSON.parse(fs.readFileSync(FILE_GRUPOS));
       data.forEach(grupo => {
-        const idNum = Number(grupo.id);
-        gruposActivos.set(idNum, { ...grupo, id: idNum, fechaInicio: new Date(grupo.fechaInicio) });
-        gruposAutorizados.add(idNum);
+        gruposActivos.set(grupo.id, grupo);
+        gruposAutorizados.add(grupo.id);
       });
       console.log("📂 gruposActivos cargados y autorizados desde JSON.");
     } catch (err) {
-      console.error("❌ Error al cargar grupos:", err);
+      console.error("❌ Error al cargar grupos:", err.message);
     }
   }
 }
 
+// --- Verificación automática de permisos administrativos ---
 async function verificarPermisosAdmin() {
-  try {
-    const me = await bot.telegram.getMe();
-    for (const [chatId, grupo] of gruposActivos.entries()) {
-      try {
-        const miembro = await bot.telegram.getChatMember(chatId, me.id);
-        if (miembro.status !== 'administrator') {
-          console.warn(`⚠️ El bot está en ${grupo.nombre} (${chatId}) sin permisos admin.`);
-          await bot.telegram.sendMessage(chatId,
-            "⚠️ El bot necesita permisos de administrador con 'Eliminar mensajes' y 'Banear usuarios'.");
-        } else {
-          console.log(`✅ Permisos correctos en: ${grupo.nombre} (${chatId})`);
-        }
-      } catch (err) {
-        console.error(`❌ Error al verificar permisos en grupo ${chatId}:`, err);
+  for (const [chatId, grupo] of gruposActivos.entries()) {
+    try {
+      const miembro = await bot.telegram.getChatMember(chatId, (await bot.telegram.getMe()).id);
+      if (miembro.status !== 'administrator') {
+        console.warn(`⚠️ El bot está en el grupo ${grupo.nombre} (${chatId}) pero no tiene permisos administrativos.`);
+        await bot.telegram.sendMessage(chatId,
+          "⚠️ El bot necesita permisos de administrador con 'Eliminar mensajes' y 'Banear usuarios' para funcionar correctamente.");
+      } else {
+        console.log(`✅ El bot tiene permisos administrativos en: ${grupo.nombre} (${chatId})`);
       }
+    } catch (err) {
+      console.error(`❌ Error al verificar permisos en grupo ${chatId}:`, err.message);
     }
-  } catch (err) {
-    console.error("❌ Error global al verificar permisos:", err);
   }
 }
 
@@ -78,13 +60,13 @@ verificarPermisosAdmin();
 // --- BLOQUE 2: Validaciones y utilidades ---
 const VALIDACIONES = {
   soloSimbolos: /^[\p{P}\p{S}]+$/u,
-  soloEmoji: new RegExp(`^(?:${emojiRegex().source})+$`),
+  soloEmoji: /^[\p{Emoji}]+$/u,
   soloNumeros: /^\d+$/u,
   letraMasNumeros: /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ]\d+$/u,
   letrasRepetidas: /(.)\1{3,}/u,
   longitudInvalida: /^.{0,2}$|^.{31,}$/u,
   nombresEliminados: /\b(deleted user|usuario eliminado|cuenta eliminada|account deleted|unknown|desconocido)\b/i,
-  caracteresNoLatinos: /[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ\d\s\p{P}\p{S}]/u
+  caracteresNoLatinos: /[^A-Za-zÁÉÍÓÚÜÑáéíóúüñ\d\s\p{Emoji}\p{P}\p{S}]/u
 };
 
 function nombreInvalido(nombre) {
@@ -104,9 +86,9 @@ async function registrarBienvenida(ctx, message) {
     const idAntiguo = lista.shift();
     try {
       await ctx.telegram.deleteMessage(chatId, idAntiguo);
-      console.log(`🗑️ Mensaje antiguo eliminado: ${idAntiguo}`);
+      console.log(`🗑️ Mensaje de bienvenida antiguo eliminado: ${idAntiguo}`);
     } catch (err) {
-      console.error(`Error al borrar mensaje antiguo ${idAntiguo}:`, err);
+      console.error(`Error al borrar mensaje antiguo ${idAntiguo}:`, err.message);
     }
   }
   mensajesBienvenida.set(chatId, lista);
@@ -115,7 +97,6 @@ async function registrarBienvenida(ctx, message) {
 async function autoDelete(ctx, messagePromise, delayMs = 4 * 60 * 1000) {
   try {
     const sent = await messagePromise;
-    if (!sent || !sent.message_id) return;
     if (sent.text && sent.text.startsWith("✅ Bienvenido")) {
       registrarBienvenida(ctx, sent);
     }
@@ -124,11 +105,17 @@ async function autoDelete(ctx, messagePromise, delayMs = 4 * 60 * 1000) {
         await ctx.telegram.deleteMessage(ctx.chat.id, sent.message_id);
         console.log(`🗑️ Mensaje eliminado automáticamente: ${sent.message_id}`);
       } catch (err) {
-        console.error(`❌ Error al borrar mensaje ${sent.message_id}:`, err);
+        if (err.code === 403) {
+          console.warn(`⚠️ El bot no tiene permisos para borrar mensajes en el grupo (${ctx.chat.id}).`);
+        } else if (err.code === 400 && err.description?.includes("message to delete not found")) {
+          console.log(`ℹ️ Mensaje ${sent.message_id} ya no existe, no se pudo borrar.`);
+        } else {
+          console.error(`❌ Error inesperado al borrar mensaje ${sent.message_id}:`, err.message);
+        }
       }
     }, delayMs);
   } catch (err) {
-    console.error("❌ Error en autoDelete:", err);
+    console.error("❌ Error al enviar/borrar mensaje:", err.message);
   }
 }
 // --- BLOQUE 3: Registro y actualización de grupos ---
@@ -183,11 +170,7 @@ async function procesarUsuario(ctx, user, tipo = 'directo') {
       if (tipo === 'solicitud') {
         await ctx.telegram.declineChatJoinRequest(chatId, userId);
       } else {
-        try {
-          await ctx.telegram.banChatMember(chatId, userId);
-        } catch {
-          await autoDelete(ctx, ctx.reply("⚠️ No tengo permisos para banear."));
-        }
+        await ctx.telegram.banChatMember(chatId, userId);
       }
       await autoDelete(ctx, ctx.telegram.sendMessage(chatId, `🚫 Usuario rechazado: ${nombre} ${username}`));
       actualizarGrupo(chatId, false);
@@ -201,8 +184,9 @@ async function procesarUsuario(ctx, user, tipo = 'directo') {
           {
             reply_markup: {
               inline_keyboard: [
-                [{ text: "🚨 BAN (Ban Local)", callback_data: `ban_${userId}` }],
-                [{ text: "🌐 GBAN", callback_data: `gban_${userId}` }]
+                [
+                  { text: "🚨 BAN (Ban Local)", callback_data: `ban_${userId}` }
+                ]
               ]
             }
           }
@@ -217,7 +201,7 @@ async function procesarUsuario(ctx, user, tipo = 'directo') {
 // --- BLOQUE 5: Middleware y comando /start ---
 bot.use((ctx, next) => {
   if (ctx.message && ctx.message.text) {
-    const parts = ctx.message.text.split(/\s+/);
+    const parts = ctx.message.text.split(' ');
     ctx.args = parts.slice(1);
   }
   return next();
@@ -236,10 +220,10 @@ bot.on('my_chat_member', async (ctx) => {
   if ((estadoAnterior === 'left' || estadoAnterior === 'kicked' || !estadoAnterior) &&
       (['member','administrator','creator'].includes(nuevoEstado))) {
     registrarGrupo(chatId, ctx.chat.title);
-    const prompt = await ctx.reply("🔐 Este grupo requiere autenticación.\nResponde a este mensaje con la contraseña:", {
+    gruposPendientes.set(chatId, { nombre: ctx.chat.title, fecha_solicitud: new Date() });
+    autoDelete(ctx, ctx.reply("🔐 Este grupo requiere autenticación.\nResponde a este mensaje con la contraseña:", {
       reply_markup: { force_reply: true, selective: true }
-    });
-    gruposPendientes.set(chatId, { nombre: ctx.chat.title, fecha_solicitud: new Date(), promptId: prompt.message_id });
+    }));
   }
 
   if (nuevoEstado === 'left' || nuevoEstado === 'kicked') {
@@ -255,9 +239,6 @@ bot.on('message', async (ctx) => {
   const chatId = ctx.chat.id;
 
   if (gruposPendientes.has(chatId) && ctx.message.text && ctx.message.reply_to_message) {
-    const info = gruposPendientes.get(chatId);
-    if (ctx.message.reply_to_message.message_id !== info.promptId) return;
-
     const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
     if (!esAdmin) {
       return autoDelete(ctx, ctx.reply("❌ Solo administradores pueden autorizar el grupo."));
@@ -266,29 +247,18 @@ bot.on('message', async (ctx) => {
     const passwordIngresado = ctx.message.text.trim();
 
     if (passwordIngresado === BOT_PASSWORD) {
-      const idNum = Number(chatId);
-      gruposAutorizados.add(idNum);
-      gruposPendientes.delete(idNum);
-      intentosFallidos.delete(idNum);
+      gruposAutorizados.add(chatId);
+      gruposPendientes.delete(chatId);
+      intentosFallidos.delete(chatId);
       guardarGrupos();
 
       ctx.deleteMessage(ctx.message.message_id).catch(() => {});
       autoDelete(ctx, ctx.reply("✅ Grupo autorizado correctamente."));
-      console.log(`🔑 Grupo autorizado: ${ctx.chat.title} (${idNum})`);
+      console.log(`🔑 Grupo autorizado: ${ctx.chat.title} (${chatId})`);
     } else {
       ctx.deleteMessage(ctx.message.message_id).catch(() => {});
       autoDelete(ctx, ctx.reply("❌ Contraseña incorrecta. El bot se eliminará en 10 minutos si no se autoriza."));
-      const intentos = (intentosFallidos.get(chatId) || 0) + 1;
-      intentosFallidos.set(chatId, intentos);
-
-      if (intentos >= 3) {
-        await bot.telegram.leaveChat(chatId);
-        gruposPendientes.delete(chatId);
-        gruposActivos.delete(chatId);
-        intentosFallidos.delete(chatId);
-        guardarGrupos();
-        console.log(`🚪 Grupo eliminado por múltiples intentos fallidos: ${chatId}`);
-      }
+      intentosFallidos.set(chatId, (intentosFallidos.get(chatId) || 0) + 1);
     }
   }
 });
@@ -306,7 +276,7 @@ setInterval(async () => {
         guardarGrupos();
         console.log(`⏱️ Grupo eliminado automáticamente por no autorizarse: ${chatId}`);
       } catch (err) {
-        console.error(`Error al salir del grupo ${chatId}:`, err);
+        console.error(`Error al salir del grupo ${chatId}:`, err.message);
       }
     }
   }
@@ -333,6 +303,7 @@ bot.on('chat_join_request', async (ctx) => {
   await procesarUsuario(ctx, user, 'solicitud');
 });
 // --- BLOQUE 9: Comandos administrativos ---
+// Comando /delgrupo <id>
 bot.command('delgrupo', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) {
@@ -358,6 +329,7 @@ bot.command('delgrupo', async (ctx) => {
   }
 });
 
+// Comando /auth <password>
 bot.command('auth', async (ctx) => {
   const chatId = ctx.chat.id;
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
@@ -377,113 +349,106 @@ bot.command('auth', async (ctx) => {
     console.log(`🔑 Grupo autorizado vía /auth: ${ctx.chat.title} (${chatId})`);
   } else {
     autoDelete(ctx, ctx.reply("❌ Contraseña incorrecta."));
-    const intentos = (intentosFallidos.get(chatId) || 0) + 1;
-    intentosFallidos.set(chatId, intentos);
+    intentosFallidos.set(chatId, (intentosFallidos.get(chatId) || 0) + 1);
   }
 });
-// --- BLOQUE 10: Función auxiliar y GBAN ---
+// --- BLOQUE EXTRA: Función auxiliar y GBAN ---
+// Función auxiliar para verificar administradores
 async function esAdminDelGrupo(ctx, userId) {
   try {
     const miembro = await ctx.telegram.getChatMember(ctx.chat.id, userId);
     return ['administrator', 'creator'].includes(miembro.status);
   } catch (err) {
-    console.error("❌ Error al verificar admin:", err);
+    console.error("❌ Error al verificar admin:", err.message);
     return false;
   }
 }
 
-// Botón inline BAN LOCAL y GBAN
+// --- BLOQUE EXTRA: Botón inline BAN LOCAL ---
 bot.on('callback_query', async (ctx) => {
   const data = ctx.callbackQuery.data;
-  if (data && (data.startsWith("ban_") || data.startsWith("gban_"))) {
-    const [accion, userIdStr] = data.split("_");
-    const userId = parseInt(userIdStr);
+
+  // Solo procesar si el callback es de tipo "ban_"
+  if (data && data.startsWith("ban_")) {
+    const userId = parseInt(data.split("_")[1]);
+
+    // Verificar que el usuario que presiona el botón sea admin
     const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
     if (!esAdmin) {
       return ctx.answerCbQuery("❌ Solo administradores pueden usar este botón.", { show_alert: true });
     }
+
     try {
-      if (accion === "ban") {
-        await ctx.telegram.banChatMember(ctx.chat.id, userId);
-        console.log(`🚨 Usuario ${userId} baneado localmente en grupo: ${ctx.chat.title} (${ctx.chat.id})`);
-        await ctx.editMessageText("🚨 Usuario baneado localmente por administrador.");
-      } else if (accion === "gban") {
-        await Promise.allSettled([...gruposActivos.keys()].map(async (chatId) => {
-          try {
-                       const chatInfo = await ctx.telegram.getChat(chatId);
-            if (chatInfo.type === 'group' || chatInfo.type === 'supergroup') {
-              try {
-                await ctx.telegram.banChatMember(chatId, userId);
-                console.log(`🚨 Usuario ${userId} baneado en grupo: ${gruposActivos.get(chatId).nombre} (${chatId})`);
-              } catch (err) {
-                console.error(`❌ Error al banear en grupo ${chatId}:`, err);
-              }
-            } else {
-              console.log(`⏭️ Saltando chat ${chatId} porque es de tipo ${chatInfo.type}`);
-            }
-          } catch (err) {
-            console.error(`❌ Error al obtener info de chat ${chatId}:`, err);
-          }
-        }));
-        await ctx.editMessageText("🌐 Usuario baneado globalmente por administrador.");
-      }
+      // Banear únicamente en el grupo actual
+      await ctx.telegram.banChatMember(ctx.chat.id, userId);
+      console.log(`🚨 Usuario ${userId} baneado localmente en grupo: ${ctx.chat.title} (${ctx.chat.id})`);
+
+      // Editar el mensaje de bienvenida para reflejar la acción
+      await ctx.editMessageText("🚨 Usuario baneado localmente por administrador.");
     } catch (err) {
-      console.error("❌ Error en callback_query:", err);
-      await ctx.answerCbQuery(`❌ Error: ${err.message}`, { show_alert: true });
+      console.error(`❌ Error al banear localmente en grupo ${ctx.chat.id}:`, err.message);
+      await ctx.answerCbQuery(`❌ Error al ejecutar ban local: ${err.message}`, { show_alert: true });
     }
   }
 });
-
-// Comando manual GBAN
+// --- BLOQUE EXTRA: Comando manual GBAN ---
+// Uso: /gban <userId> o /gban @username
+// También funciona respondiendo a un mensaje con /gban
 bot.command('gban', async (ctx) => {
-  try {
-    const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
-    if (!esAdmin) {
-      return ctx.reply("❌ Solo administradores pueden usar este comando.");
+  const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
+  if (!esAdmin) {
+    return ctx.reply("❌ Solo administradores pueden usar este comando.");
+  }
+
+  let userId;
+
+  // Caso 1: se usa respondiendo a un mensaje
+  if (ctx.message.reply_to_message) {
+    userId = ctx.message.reply_to_message.from.id;
+  } else {
+    // Caso 2: se pasa argumento (ID o @username)
+    const args = ctx.message.text.split(" ").slice(1);
+    if (args.length === 0) {
+      return ctx.reply("⚠️ Uso: /gban <id_usuario|@username> o responde a un mensaje con /gban");
     }
 
-    let userId;
-    if (ctx.message.reply_to_message) {
-      userId = ctx.message.reply_to_message.from.id;
+    const arg = args[0].trim();
+    if (arg.startsWith('@')) {
+      try {
+        const miembro = await ctx.telegram.getChatMember(ctx.chat.id, arg);
+        userId = miembro.user.id;
+      } catch (err) {
+        return ctx.reply(`❌ No se pudo encontrar al usuario ${arg}: ${err.message}`);
+      }
     } else {
-      const args = ctx.message.text.split(" ").slice(1);
-      if (args.length === 0) {
-        return ctx.reply("⚠️ Uso: /gban <id_usuario> o responde a un mensaje con /gban");
-      }
-      const arg = args[0].trim();
-      if (arg.startsWith('@')) {
-        return ctx.reply("❌ No se puede usar @username directamente, usa ID numérico o responde a un mensaje.");
-      } else {
-        userId = parseInt(arg);
-        if (isNaN(userId)) {
-          return ctx.reply("⚠️ El ID debe ser un número válido.");
-        }
+      userId = parseInt(arg);
+      if (isNaN(userId)) {
+        return ctx.reply("⚠️ El ID debe ser un número válido.");
       }
     }
+  }
 
-    await Promise.allSettled([...gruposActivos.keys()].map(async (chatId) => {
+  // Aplicar ban global en todos los grupos activos
+  try {
+    for (const [chatId, grupo] of gruposActivos.entries()) {
       try {
         const chatInfo = await ctx.telegram.getChat(chatId);
         if (chatInfo.type === 'group' || chatInfo.type === 'supergroup') {
-          try {
-            await ctx.telegram.banChatMember(chatId, userId);
-            console.log(`🚨 Usuario ${userId} baneado en grupo: ${gruposActivos.get(chatId).nombre} (${chatId})`);
-          } catch (err) {
-            console.error(`❌ Error al banear en grupo ${chatId}:`, err);
-          }
+          await ctx.telegram.banChatMember(chatId, userId);
+          console.log(`🚨 Usuario ${userId} baneado en grupo: ${grupo.nombre} (${chatId})`);
         } else {
           console.log(`⏭️ Saltando chat ${chatId} porque es de tipo ${chatInfo.type}`);
         }
       } catch (err) {
-        console.error(`❌ Error al obtener info de chat ${chatId}:`, err);
+        console.error(`❌ Error al banear en grupo ${chatId}:`, err.message);
       }
-    }));
-    ctx.reply(`🌐 Usuario ${userId} baneado globalmente.`);
+    }
+    ctx.reply(`🚨 Usuario ${userId} baneado globalmente.`);
   } catch (err) {
     ctx.reply(`❌ Error al ejecutar gban: ${err.message}`);
   }
 });
-// --- BLOQUE 11: Lanzamiento y cierre del bot ---
+// --- BLOQUE 10: Lanzamiento y cierre del bot ---
 // Lanzar bot en Railway
 bot.launch()
   .then(() => console.log("✅ Bot iniciado en Railway."))
@@ -492,13 +457,6 @@ bot.launch()
     process.exit(1);
   });
 
-// Graceful stop: detener el bot correctamente al recibir señales del sistema
-process.once('SIGINT', () => {
-  console.log("🛑 Señal SIGINT recibida. Deteniendo bot...");
-  bot.stop('SIGINT');
-});
-
-process.once('SIGTERM', () => {
-  console.log("🛑 Señal SIGTERM recibida. Deteniendo bot...");
-  bot.stop('SIGTERM');
-});
+// Graceful stop
+process.once('SIGINT', () => bot.stop('SIGINT'));
+process.once('SIGTERM', () => bot.stop('SIGTERM'));
