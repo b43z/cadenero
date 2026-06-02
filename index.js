@@ -284,15 +284,17 @@ async function esAdminDelGrupo(ctx, userId) {
 bot.command('gban', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) {
-    return ctx.reply("❌ Solo los administradores pueden usar este comando.");
+    return autoDelete(ctx, "❌ Solo los administradores pueden usar este comando.");
   }
 
   const args = ctx.message.text.split(" ").slice(1);
-  let userId;
+  let userId, motivo = "Sin motivo especificado";
+  let nombreUsuario = "(desconocido)";
 
   // 1️⃣ Si se responde a un mensaje
   if (ctx.message.reply_to_message) {
     userId = ctx.message.reply_to_message.from.id;
+    nombreUsuario = ctx.message.reply_to_message.from.first_name || "(sin nombre)";
   } else if (args[0]) {
     // 2️⃣ Si es ID numérico
     if (/^\d+$/.test(args[0])) {
@@ -306,6 +308,7 @@ bot.command('gban', async (ctx) => {
           const miembro = await ctx.telegram.getChatMember(chatId, ctx.from.id);
           if (miembro.user.username === username) {
             userId = miembro.user.id;
+            nombreUsuario = miembro.user.first_name || `@${username}`;
             break;
           }
         } catch {
@@ -313,26 +316,41 @@ bot.command('gban', async (ctx) => {
         }
       }
       if (!userId) {
-        return ctx.reply(`⚠️ No se pudo resolver el usuario ${args[0]} en los grupos activos.`);
+        return autoDelete(ctx, `⚠️ No se pudo resolver el usuario ${args[0]} en los grupos activos.`);
       }
     }
   }
 
+  // 4️⃣ Motivo (si hay más argumentos después del ID/username)
+  if (args.length > 1) {
+    motivo = args.slice(1).join(" ");
+  }
+
   if (!userId) {
-    return ctx.reply("⚠️ Uso: `/gban <id_usuario | @usuario>` o responde al mensaje del usuario.", { parse_mode: "Markdown" });
+    return autoDelete(ctx, "⚠️ Uso: `/gban <id_usuario | @usuario> [motivo]` o responde al mensaje del usuario.", { parse_mode: "Markdown" });
   }
 
   // 🚨 Ban global en todos los grupos activos
   for (const [chatId, grupo] of gruposActivos.entries()) {
     try {
       await ctx.telegram.banChatMember(chatId, userId);
-      console.log(`🚨 Usuario ${userId} baneado en grupo: ${grupo.nombre} (${chatId})`);
+      console.log(`🚨 Usuario ${nombreUsuario} (${userId}) baneado en grupo: ${grupo.nombre} (${chatId})`);
+
+      // Mensaje en cada grupo con autoDelete (5 min)
+      autoDelete(ctx, {
+        text: `🚨 Usuario *${nombreUsuario}* (ID: ${userId}) fue baneado globalmente.\n📝 Motivo: ${motivo}`,
+        options: { parse_mode: "Markdown" }
+      });
     } catch (err) {
       console.error(`❌ Error al banear en grupo ${chatId}:`, err.message);
     }
   }
 
-  await ctx.reply(`🚨 Usuario ${userId} baneado globalmente por administrador.`);
+  // Confirmación en el grupo donde se ejecutó el comando
+  autoDelete(ctx, {
+    text: `🚨 Usuario *${nombreUsuario}* (ID: ${userId}) baneado globalmente.\n📝 Motivo: ${motivo}`,
+    options: { parse_mode: "Markdown" }
+  });
 });
 
 // --- BLOQUE 10: Configuración de Webhook para Railway ---
