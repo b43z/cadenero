@@ -97,7 +97,7 @@ async function procesarUsuario(ctx, user, origen) {
     console.log(`✅ Usuario procesado: ${user.first_name}`);
   }
 }
-// --- BLOQUE 4B: Manejo de solicitudes de unión ---
+// --- BLOQUE 4B: Manejo de solicitudes de unión con mensajes y botón Ban ---
 bot.on('chat_join_request', async (ctx) => {
   const chatId = String(ctx.chat.id);
   const grupo = gruposActivos.get(chatId);
@@ -115,12 +115,52 @@ bot.on('chat_join_request', async (ctx) => {
     await ctx.declineChatJoinRequest(user.id);
     actualizarGrupo(chatId, 0, 1);
     console.log(`❌ Solicitud rechazada: ${user.first_name}`);
+
+    // Mensaje de rechazo con botón Ban
+    await ctx.telegram.sendMessage(chatId, `🚫 Usuario *${user.first_name}* fue rechazado por nombre inválido.`, {
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "🚨 Banear", callback_data: `ban_${user.id}` }]
+        ]
+      }
+    });
   } else {
     // Aceptar solicitud
     await ctx.approveChatJoinRequest(user.id);
     usuariosProcesados.add(user.id);
     actualizarGrupo(chatId, 1, 0);
     console.log(`✅ Solicitud aprobada: ${user.first_name}`);
+
+    // Mensaje de bienvenida con botón Ban
+    await ctx.telegram.sendMessage(chatId, `👋 Bienvenido *${user.first_name}* al grupo *${grupo.nombre}*!`, {
+      parse_mode: "Markdown",
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "🚨 Banear", callback_data: `ban_${user.id}` }]
+        ]
+      }
+    });
+  }
+});
+
+// --- BLOQUE EXTRA: Callback del botón Ban ---
+bot.on('callback_query', async (ctx) => {
+  const data = ctx.callbackQuery.data;
+  if (data.startsWith("ban_")) {
+    const userId = parseInt(data.split("_")[1]);
+    const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
+
+    if (!esAdmin) {
+      return ctx.answerCbQuery("❌ Solo administradores pueden usar este botón.", { show_alert: true });
+    }
+
+    try {
+      await ctx.telegram.banChatMember(ctx.chat.id, userId);
+      await ctx.editMessageText("🚨 Usuario baneado por administrador.");
+    } catch (err) {
+      await ctx.answerCbQuery(`❌ Error al banear: ${err.message}`, { show_alert: true });
+    }
   }
 });
 
