@@ -44,6 +44,8 @@ function cargarGrupos() {
 cargarGrupos();
 // --- BLOQUE 2: Validaciones y utilidades ---
 // --- BLOQUE 2: Validaciones y utilidades ---
+const mensajesActivos = new Map(); // chatId -> array de message_id
+
 function nombreInvalido(nombre) {
   const prohibidos = ["http", "https", "www", ".com", ".net", ".org"];
   const limpio = nombre.trim();
@@ -74,6 +76,7 @@ function nombreInvalido(nombre) {
 
   return false;
 }
+
 function registrarGrupo(chatId, nombre) {
   const idStr = String(chatId);
   if (!gruposActivos.has(idStr)) {
@@ -88,6 +91,34 @@ function registrarGrupo(chatId, nombre) {
     guardarGrupos();
     console.log(`✅ Grupo registrado y autorizado: ${nombre} (${idStr})`);
   }
+}
+
+function autoDelete(ctx, mensaje) {
+  ctx.reply(mensaje).then(sent => {
+    const chatId = String(ctx.chat.id);
+
+    // Inicializa lista si no existe
+    if (!mensajesActivos.has(chatId)) {
+      mensajesActivos.set(chatId, []);
+    }
+
+    const lista = mensajesActivos.get(chatId);
+    lista.push(sent.message_id);
+
+    // Si hay más de 3 mensajes, borra los más antiguos
+    while (lista.length > 3) {
+      const viejo = lista.shift();
+      ctx.deleteMessage(viejo).catch(() => {});
+    }
+
+    // Borra este mensaje después de 4 minutos (240000 ms)
+    setTimeout(() => {
+      ctx.deleteMessage(sent.message_id).catch(() => {});
+      // Limpia de la lista
+      const idx = lista.indexOf(sent.message_id);
+      if (idx !== -1) lista.splice(idx, 1);
+    }, 240000);
+  });
 }
 
 function actualizarGrupo(chatId, procesados, rechazados) {
