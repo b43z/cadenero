@@ -43,7 +43,6 @@ function cargarGrupos() {
 }
 cargarGrupos();
 // --- BLOQUE 2: Validaciones y utilidades ---
-// --- BLOQUE 2: Validaciones y utilidades ---
 const mensajesActivos = new Map(); // chatId -> array de message_id
 
 function nombreInvalido(nombre) {
@@ -94,14 +93,15 @@ function registrarGrupo(chatId, nombre) {
 }
 
 function autoDelete(ctx, mensaje) {
-  ctx.reply(mensaje).then(sent => {
-    const chatId = String(ctx.chat.id);
+  const chatId = String(ctx.chat.id);
 
-    // Inicializa lista si no existe
-    if (!mensajesActivos.has(chatId)) {
-      mensajesActivos.set(chatId, []);
-    }
+  // Permite enviar texto simple o texto con opciones (inline keyboard, parse_mode, etc.)
+  const sendPromise = typeof mensaje === "string"
+    ? ctx.reply(mensaje)
+    : ctx.reply(mensaje.text, mensaje.options);
 
+  sendPromise.then(sent => {
+    if (!mensajesActivos.has(chatId)) mensajesActivos.set(chatId, []);
     const lista = mensajesActivos.get(chatId);
     lista.push(sent.message_id);
 
@@ -114,7 +114,6 @@ function autoDelete(ctx, mensaje) {
     // Borra este mensaje después de 4 minutos (240000 ms)
     setTimeout(() => {
       ctx.deleteMessage(sent.message_id).catch(() => {});
-      // Limpia de la lista
       const idx = lista.indexOf(sent.message_id);
       if (idx !== -1) lista.splice(idx, 1);
     }, 240000);
@@ -137,17 +136,34 @@ async function procesarUsuario(ctx, user, origen) {
   const grupo = gruposActivos.get(chatId);
   if (!grupo) return;
 
+  const username = user.username ? `@${user.username}` : "(sin username)";
+
   if (nombreInvalido(user.first_name)) {
     await ctx.kickChatMember(user.id);
     actualizarGrupo(chatId, 0, 1);
-    console.log(`❌ Usuario rechazado: ${user.first_name} (${user.id})`);
+    console.log(`❌ Usuario rechazado: ${user.first_name} ${username} (${user.id})`);
+
+    // Mensaje de rechazo (sin botón) autoeliminado
+    autoDelete(ctx, `🚫 Usuario rechazado: *${user.first_name}* ${username} (ID: ${user.id})`);
   } else {
     usuariosProcesados.add(user.id);
     actualizarGrupo(chatId, 1, 0);
-    console.log(`✅ Usuario procesado: ${user.first_name} (${user.id})`);
+    console.log(`✅ Usuario procesado: ${user.first_name} ${username} (${user.id})`);
+
+    // Mensaje de bienvenida con botón Ban autoeliminado
+    autoDelete(ctx, {
+      text: `👋 Bienvenido *${user.first_name}* ${username} (ID: ${user.id}) al grupo *${grupo.nombre}*!`,
+      options: {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "🚨 Banear", callback_data: `ban_${user.id}` }]
+          ]
+        }
+      }
+    });
   }
 }
-
 // --- BLOQUE 4B: Manejo de solicitudes de unión con mensajes y botón Ban ---
 bot.on('chat_join_request', async (ctx) => {
   const chatId = String(ctx.chat.id);
@@ -159,35 +175,26 @@ bot.on('chat_join_request', async (ctx) => {
   }
 
   const user = ctx.chatJoinRequest.from;
-  console.log(`📩 Nueva solicitud de unión: ${user.first_name} (${user.id}) en grupo ${grupo.nombre}`);
+  const username = user.username ? `@${user.username}` : "(sin username)";
+  console.log(`📩 Nueva solicitud: ${user.first_name} ${username} (${user.id}) en grupo ${grupo.nombre}`);
 
   if (nombreInvalido(user.first_name)) {
-    // Rechazar solicitud
     await ctx.declineChatJoinRequest(user.id);
     actualizarGrupo(chatId, 0, 1);
-    console.log(`❌ Solicitud rechazada: ${user.first_name} (${user.id})`);
+    console.log(`❌ Solicitud rechazada: ${user.first_name} ${username} (${user.id})`);
 
-    // Mensaje de rechazo con botón Ban
-    await ctx.telegram.sendMessage(chatId, 
-      `🚫 Usuario *${user.first_name}* (${user.id}) fue rechazado por nombre inválido.`, {
-        parse_mode: "Markdown",
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "🚨 Banear", callback_data: `ban_${user.id}` }]
-          ]
-        }
-      }
-    );
+    // Mensaje de rechazo (sin botón) autoeliminado
+    autoDelete(ctx, `🚫 Usuario *${user.first_name}* ${username} (ID: ${user.id}) fue rechazado por nombre inválido.`);
   } else {
-    // Aceptar solicitud
     await ctx.approveChatJoinRequest(user.id);
     usuariosProcesados.add(user.id);
     actualizarGrupo(chatId, 1, 0);
-    console.log(`✅ Solicitud aprobada: ${user.first_name} (${user.id})`);
+    console.log(`✅ Solicitud aprobada: ${user.first_name} ${username} (${user.id})`);
 
-    // Mensaje de bienvenida con botón Ban
-    await ctx.telegram.sendMessage(chatId, 
-      `👋 Bienvenido *${user.first_name}* (${user.id}) al grupo *${grupo.nombre}*!`, {
+    // Mensaje de bienvenida con botón Ban autoeliminado
+    autoDelete(ctx, {
+      text: `👋 Bienvenido *${user.first_name}* ${username} (ID: ${user.id}) al grupo *${grupo.nombre}*!`,
+      options: {
         parse_mode: "Markdown",
         reply_markup: {
           inline_keyboard: [
@@ -195,10 +202,9 @@ bot.on('chat_join_request', async (ctx) => {
           ]
         }
       }
-    );
+    });
   }
 });
-
 
 // --- BLOQUE EXTRA: Callback del botón Ban ---
 bot.on('callback_query', async (ctx) => {
