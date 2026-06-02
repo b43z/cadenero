@@ -25,22 +25,22 @@ function guardarGrupos() {
 }
 
 function cargarGrupos() {
-  if (fs.existsSync(FILE_GRUPOS)) {
-    try {
-      const data = JSON.parse(fs.readFileSync(FILE_GRUPOS));
-      data.forEach(grupo => {
-        const idNum = Number(grupo.id); // ✅ forzar número
-        gruposActivos.set(idNum, { ...grupo, id: idNum });
-        gruposAutorizados.add(idNum);
-      });
-      console.log("📂 gruposActivos cargados y autorizados desde JSON.");
-      console.log("🔎 gruposAutorizados contiene:", [...gruposAutorizados]);
-    } catch (err) {
-      console.error("❌ Error al cargar grupos:", err.message);
-    }
+  try {
+    const data = fs.readFileSync("gruposActivos.json", "utf8");
+    const grupos = JSON.parse(data);
+
+    grupos.forEach(grupo => {
+      const idNum = Number(grupo.id);
+      gruposActivos.set(idNum, { ...grupo, id: idNum });
+      gruposAutorizados.add(idNum);
+    });
+
+    console.log("📂 gruposActivos cargados y autorizados desde JSON.");
+    console.log("🔎 gruposAutorizados contiene:", [...gruposAutorizados]);
+  } catch (error) {
+    console.error("❌ Error al cargar grupos:", error);
   }
 }
-
 cargarGrupos();
 // --- BLOQUE 2: Validaciones y utilidades ---
 function nombreInvalido(nombre) {
