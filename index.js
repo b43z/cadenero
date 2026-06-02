@@ -99,30 +99,9 @@ async function procesarUsuario(ctx, user, origen) {
   }
 }
 // --- BLOQUE 5: Middleware de autorización ---
-bot.use(async (ctx, next) => {
-  const chatId = Number(ctx.chat?.id);
-  if (!chatId) return next();
 
-  if (!gruposAutorizados.has(chatId)) {
-    return autoDelete(ctx, "⚠️ Este grupo aún no está autorizado. Ingresa la contraseña.");
-  }
-  return next();
-});
 // --- BLOQUE 6: Autenticación de grupos ---
-bot.command('auth', async (ctx) => {
-  const chatId = Number(ctx.chat.id);
-  const args = ctx.message.text.split(" ").slice(1);
-  const password = args[0];
 
-  if (password === BOT_PASSWORD) {
-    registrarGrupo(chatId, ctx.chat.title || ctx.chat.username || "Grupo sin nombre");
-    return ctx.reply("✅ Grupo autorizado correctamente.");
-  } else {
-    const intentos = (intentosFallidos.get(chatId) || 0) + 1;
-    intentosFallidos.set(chatId, intentos);
-    return ctx.reply(`❌ Contraseña incorrecta. Intento ${intentos}/3`);
-  }
-});
 // --- BLOQUE 7: Limpieza de grupos ---
 bot.command('delgrupo', async (ctx) => {
   const chatId = Number(ctx.chat.id);
