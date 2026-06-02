@@ -43,17 +43,36 @@ function cargarGrupos() {
 }
 cargarGrupos();
 // --- BLOQUE 2: Validaciones y utilidades ---
+// --- BLOQUE 2: Validaciones y utilidades ---
 function nombreInvalido(nombre) {
   const prohibidos = ["http", "https", "www", ".com", ".net", ".org"];
-  return prohibidos.some(p => nombre.toLowerCase().includes(p));
-}
+  const limpio = nombre.trim();
 
-function autoDelete(ctx, mensaje) {
-  ctx.reply(mensaje).then(sent => {
-    setTimeout(() => {
-      ctx.deleteMessage(sent.message_id).catch(() => {});
-    }, 10000);
-  });
+  // Regla 1: palabras prohibidas
+  if (prohibidos.some(p => limpio.toLowerCase().includes(p))) return true;
+
+  // Regla 2: longitud mínima (>=3 caracteres válidos)
+  if (limpio.length < 3) return true;
+
+  // Regla 3: solo números
+  if (/^\d+$/.test(limpio)) return true;
+
+  // Regla 4: solo puntuación
+  if (/^[\p{P}]+$/u.test(limpio)) return true;
+
+  // Regla 5: solo símbolos
+  if (/^[\p{S}]+$/u.test(limpio)) return true;
+
+  // Regla 6: solo emojis
+  if (/^\p{Emoji}+$/u.test(limpio)) return true;
+
+  // Regla 7: emoji + una sola letra
+  if (/^\p{Emoji}[a-zA-Z]$|^[a-zA-Z]\p{Emoji}$/u.test(limpio)) return true;
+
+  // Regla 8: letras repetidas (3+ consecutivas)
+  if (/(.)\1{2,}/.test(limpio)) return true;
+
+  return false;
 }
 function registrarGrupo(chatId, nombre) {
   const idStr = String(chatId);
