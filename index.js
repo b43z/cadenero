@@ -97,6 +97,33 @@ async function procesarUsuario(ctx, user, origen) {
     console.log(`✅ Usuario procesado: ${user.first_name}`);
   }
 }
+// --- BLOQUE 4B: Manejo de solicitudes de unión ---
+bot.on('chat_join_request', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  const grupo = gruposActivos.get(chatId);
+
+  if (!grupo || !gruposAutorizados.has(chatId)) {
+    console.log(`⚠️ Solicitud en grupo no autorizado: ${chatId}`);
+    return;
+  }
+
+  const user = ctx.chatJoinRequest.from;
+  console.log(`📩 Nueva solicitud de unión: ${user.first_name} (${user.id}) en grupo ${grupo.nombre}`);
+
+  if (nombreInvalido(user.first_name)) {
+    // Rechazar solicitud
+    await ctx.declineChatJoinRequest(user.id);
+    actualizarGrupo(chatId, 0, 1);
+    console.log(`❌ Solicitud rechazada: ${user.first_name}`);
+  } else {
+    // Aceptar solicitud
+    await ctx.approveChatJoinRequest(user.id);
+    usuariosProcesados.add(user.id);
+    actualizarGrupo(chatId, 1, 0);
+    console.log(`✅ Solicitud aprobada: ${user.first_name}`);
+  }
+});
+
 // --- BLOQUE 5: Middleware de autorización ---
 
 // --- BLOQUE 6: Autenticación de grupos ---
