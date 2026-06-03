@@ -287,6 +287,7 @@ bot.on('chat_join_request', async (ctx) => {
     `¿Aceptas el reglamento para ingresar?`;
 
   try {
+    // Intentar enviar SIEMPRE al privado del usuario
     await ctx.telegram.sendMessage(user.id, mensajeReglamento, {
       parse_mode: "Markdown",
       reply_markup: {
@@ -296,8 +297,10 @@ bot.on('chat_join_request', async (ctx) => {
         ]
       }
     });
+    console.log(`📤 Reglamento enviado al privado de ${user.first_name} (${user.id})`);
   } catch (err) {
     console.error("❌ No se pudo enviar mensaje privado:", err.message);
+    // Si falla, mostrarlo en el grupo como fallback
     autoDelete(ctx, {
       text: mensajeReglamento,
       options: {
