@@ -213,16 +213,18 @@ bot.on('chat_join_request', async (ctx) => {
 
   const mensajeReglamento =
     `👋 Hola *${user.first_name}*!\n\n` +
-    `Propósito del grupo:\nEste grupo es para platicar, conocer personas, y relajarse tirando cotorreo y carrilla...\n\n` +
+    `Propósito del grupo:\nEste grupo es para platicar, conocer personas, y relajarse tirando cotorreo y carrilla, aveces se pone intensa la platica y pueden ponerse cachondas las cosas pero SI BUSCAS UN GRUPO XXX, PLATICAS HOT AQUI NO ES...\n\n` +
     `📖 REGLAMENTO\n` +
     `💀 No mandar fotopitos al grupo\n` +
+    `☠️ Si Mandas Material +18 procura que sea tuyo y ten en cuenta que se borra pasados unos minutos\n` +
     `💀 Si no estás activo con regularidad serás expulsado\n` +
-    `☠️ No se permite morbo, chantaje ni hackeos\n` +
-    `☠️ Prohibido compartir links (ban automático)\n` +
+    `☠️ No se permite morbo, chantajes ni hackeos, fotopitos por error, nv x nv, cambios etc \n` +
+    `☠️ Prohibido compartir links o pedir grupos (ban automático)\n` +
     `☠️ Ser mayor de edad (+18)\n` +
     `☠️ Prohibido CP y materiales ilegales\n` +
-    `🚨 Si vendes contenido verifícate con un adm\n` +
-    `☠️ No acosar en privado\n` +
+    `🚨 Si vendes contenido pregunta si puedes y verifícate con un adm antes de publicar o seras expulsada\n` +
+    `🚨 Si compras contenido es bajo tu riesgo y responsabilidad, el grupo no interviene en las transacciones, si tienes un proble reporta y un admi puede intervenir mas no obligar a que entreguen contenido o reenvolso alguno\n` +
+    `☠️ No acosar en privado o solicitarlos a cada momento\n` +
     `☠️ No estés de preguntón si no vas a comprar\n\n` +
     `¿Aceptas el reglamento para ingresar?`;
 
@@ -298,9 +300,20 @@ bot.start((ctx) => {
   if (ctx.chat.type === "private") {
     return ctx.reply(
       "✅ El bot se ha iniciado correctamente.\n\n" +
-      "📋 **Menú de Comandos Disponibles en Privado**\n\n" +
-      "⚡ **/start** → Inicia el bot y muestra este menú.\n\n" +
-      "👉 Los demás comandos solo funcionan dentro de los grupos de la federación."
+      "📋 **Comandos Disponibles**\n\n" +
+      "⚡ **/start** → Inicia el bot y muestra este menú.\n" +
+      "ℹ️ **/info <id | @usuario>** → Muestra información del usuario y los grupos donde está.\n" +
+      "⏸️ **/pausar** → Pausa el ingreso de nuevos usuarios en el grupo.\n" +
+      "▶️ **/activo** → Reanuda el ingreso de usuarios en espera.\n" +
+      "🚨 **/gban <id | @usuario> [motivo]** → Ban global en todos los grupos activos (solo administradores).\n" +
+      "✅ **/gunban <id | @usuario> [motivo]** → Quita el ban global en todos los grupos activos.\n" +
+      "🚫 **/ban <id | @usuario> [motivo]** → Ban local en el grupo actual.\n" +
+      "✅ **/unban <id_usuario> [motivo]** → Quita el ban local en el grupo actual.\n" +
+      "⚠️ **/warn <id | @usuario> [motivo]** → Asigna un warn al usuario (3 warns = ban automático).\n" +
+      "✅ **/unwarn <id_usuario> [motivo]** → Elimina los warns de un usuario.\n" +
+      "🔇 **/mute <id | @usuario> [motivo]** → Silencia al usuario en el grupo.\n" +
+      "✅ **/unmute <id | @usuario> [motivo]** → Quita el mute al usuario.\n\n" +
+      "👉 *Nota:* Excepto `/start`, todos estos comandos **solo funcionan dentro de los grupos de la federación**."
       , { parse_mode: "Markdown" }
     );
   }
@@ -334,6 +347,7 @@ bot.use((ctx, next) => {
   }
   return next();
 });
+
 
 
 // --- BLOQUE 9: GBAN y GUNBAN ---
