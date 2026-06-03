@@ -144,14 +144,20 @@ async function procesarUsuario(ctx, user) {
   usuariosProcesados.add(claveUsuario);
   actualizarGrupo(chatId, 1, 0);
 
+  // ✅ Mensaje con nombre, username y ID
+  const usernameText = user.username ? `@${user.username}` : "(sin username)";
+  const mensajeBienvenida =
+    `👋 Bienvenido *${user.first_name}* ${usernameText} (ID: ${user.id}) al grupo *${grupo.nombre}*!`;
+
   autoDelete(ctx, {
-    text: `👋 Bienvenido *${user.first_name}* (ID: ${user.id}) al grupo *${grupo.nombre}*!`,
+    text: mensajeBienvenida,
     options: {
       parse_mode: "Markdown",
       reply_markup: { inline_keyboard: [[{ text: "🚨 Banear", callback_data: `ban|${user.id}` }]] }
     }
   });
 }
+
 
 // --- BLOQUE 5: Comandos de pausa y reanudación ---
 bot.command('pausar', async (ctx) => {
@@ -213,7 +219,8 @@ bot.on('chat_join_request', async (ctx) => {
 
   const mensajeReglamento =
     `👋 Hola *${user.first_name}*!\n\n` +
-    `Propósito del grupo:\nEste grupo es para platicar, conocer personas, y relajarse tirando cotorreo y carrilla, aveces se pone intensa la platica y pueden ponerse cachondas las cosas pero SI BUSCAS UN GRUPO XXX, PLATICAS HOT AQUI NO ES...\n\n` +
+    `Propósito del grupo:\nEste grupo es para platicar, conocer personas, y relajarse tirando cotorreo y carrilla, aveces se pone intensa la platica y pueden ponerse cachondas las cosas pero SI BUSCAS UN GRUPO XXX, PLATICAS HOT AQUI NO ES...\n` +
+    `toma en consideracion que todos somos gente adulta con responsabilidades y que en ocaciones el grupo puede parecer desierto porque estamos ocupados, por lo que no esperes ser el centro de atencion al infresar \n\n` +
     `📖 REGLAMENTO\n` +
     `💀 No mandar fotopitos al grupo\n` +
     `☠️ Si Mandas Material +18 procura que sea tuyo y ten en cuenta que se borra pasados unos minutos\n` +
@@ -264,7 +271,14 @@ bot.on('callback_query', async (ctx) => {
     await ctx.telegram.approveChatJoinRequest(chatId, userId);
     await ctx.deleteMessage(ctx.callbackQuery.message.message_id);
     await ctx.answerCbQuery("✅ Has aceptado el reglamento.", { show_alert: true });
-    await ctx.telegram.sendMessage(chatId, `👋 Bienvenido (ID: ${userId}) al grupo!`, { parse_mode: "Markdown" });
+
+    // ✅ Obtener datos del usuario para mostrar nombre + username + ID
+    const miembro = await ctx.telegram.getChatMember(chatId, userId);
+    const usernameText = miembro.user.username ? `@${miembro.user.username}` : "(sin username)";
+    const mensajeBienvenida =
+      `👋 Bienvenido *${miembro.user.first_name}* ${usernameText} (ID: ${miembro.user.id}) al grupo!`;
+
+    await ctx.telegram.sendMessage(chatId, mensajeBienvenida, { parse_mode: "Markdown" });
   }
 
   if (data.startsWith("rechazo|")) {
