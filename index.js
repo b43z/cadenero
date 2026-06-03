@@ -221,7 +221,8 @@ bot.on('callback_query', async (ctx) => {
   const data = ctx.callbackQuery.data;
 
   if (data.startsWith("acepto_")) {
-    const [ , chatId, userId ] = data.split("_");
+    const [ , chatId, userIdStr ] = data.split("_");
+    const userId = Number(userIdStr); // 👈 conversión necesaria
     await ctx.telegram.approveChatJoinRequest(chatId, userId);
     actualizarGrupo(chatId, 1, 0);
     await ctx.answerCbQuery("✅ Has aceptado el reglamento. Bienvenido!");
@@ -229,7 +230,8 @@ bot.on('callback_query', async (ctx) => {
   }
 
   if (data.startsWith("rechazo_")) {
-    const [ , chatId, userId ] = data.split("_");
+    const [ , chatId, userIdStr ] = data.split("_");
+    const userId = Number(userIdStr); // 👈 conversión necesaria
     await ctx.telegram.declineChatJoinRequest(chatId, userId);
     actualizarGrupo(chatId, 0, 1);
     await ctx.answerCbQuery("❌ Has rechazado el reglamento. No podrás ingresar.");
@@ -237,7 +239,7 @@ bot.on('callback_query', async (ctx) => {
   }
 
   if (data.startsWith("ban_")) {
-    const userId = parseInt(data.split("_")[1]);
+    const userId = Number(data.split("_")[1]); // 👈 también convertido a número
     const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
 
     if (!esAdmin) {
