@@ -110,18 +110,38 @@ function actualizarGrupo(chatId, procesados, rechazados) {
     guardarGrupos();
   }
 }
+// --- BLOQUE 3: Funciones auxiliares adicionales ---
+// --- Función auxiliar: verificar si un usuario es admin del grupo ---
+async function esAdminDelGrupo(ctx, userId) {
+  try {
+    const miembro = await ctx.telegram.getChatMember(ctx.chat.id, userId);
+    return (
+      miembro.status === "administrator" ||
+      miembro.status === "creator"
+    );
+  } catch (err) {
+    console.error("❌ Error al verificar admin:", err.message);
+    return false;
+  }
+}
 
-// --- BLOQUE 4: Procesamiento de usuarios que entran directamente ---
+// --- BLOQUE 4 + Pausa/Activo: Procesamiento de usuarios que entran directamente ---
 async function procesarUsuario(ctx, user) {
   const chatId = String(ctx.chat.id);
   const grupo = gruposActivos.get(chatId);
   if (!grupo) return;
 
+  // 👇 Si el grupo está pausado, guardar en espera
+  if (grupo.pausado) {
+    gruposPendientes.set(user.id, { chatId, user });
+    console.log(`⏸️ Usuario en espera: ${user.first_name} (${user.id})`);
+    return autoDelete(ctx, `⏸️ Usuario *${user.first_name}* quedó en espera porque el grupo está pausado.`);
+  }
+
   const username = user.username ? `@${user.username}` : "(sin username)";
 
   if (nombreInvalido(user.first_name)) {
     try {
-      // ✅ Reemplazo de kickChatMember por banChatMember
       await ctx.telegram.banChatMember(chatId, user.id);
       actualizarGrupo(chatId, 0, 1);
       console.log(`❌ Usuario rechazado: ${user.first_name} ${username} (${user.id})`);
@@ -154,6 +174,53 @@ async function procesarUsuario(ctx, user) {
   });
 }
 
+// --- BLOQUE NUEVO: Pausar ingreso de usuarios ---
+bot.command('pausar', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  const grupo = gruposActivos.get(chatId);
+
+  if (!grupo) {
+    return ctx.reply("⚠️ Este grupo no está autorizado.");
+  }
+
+  grupo.pausado = true; // 👈 marcar grupo como pausado
+  gruposActivos.set(chatId, grupo);
+  guardarGrupos();
+
+  return ctx.reply("⏸️ El ingreso de nuevos usuarios ha sido pausado. Los usuarios quedarán en espera.");
+});
+
+// --- BLOQUE NUEVO: Reanudar ingreso de usuarios ---
+bot.command('activo', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  const grupo = gruposActivos.get(chatId);
+
+  if (!grupo) {
+    return ctx.reply("⚠️ Este grupo no está autorizado.");
+  }
+
+  grupo.pausado = false; // 👈 quitar pausa
+  gruposActivos.set(chatId, grupo);
+  guardarGrupos();
+
+  // 👇 Procesar automáticamente los usuarios en espera de este grupo
+  for (const [userId, pendiente] of gruposPendientes.entries()) {
+    if (pendiente.chatId === chatId) {
+      try {
+        await ctx.telegram.approveChatJoinRequest(chatId, Number(userId));
+        actualizarGrupo(chatId, 1, 0);
+        console.log(`▶️ Usuario ${userId} reanudado en grupo ${grupo.nombre}`);
+        autoDelete(ctx, `👋 Usuario (ID: ${userId}) fue admitido tras reanudar el grupo.`);
+      } catch (err) {
+        console.error(`❌ Error al procesar usuario en espera ${userId}:`, err.message);
+      }
+      gruposPendientes.delete(userId); // limpiar de la lista de espera
+    }
+  }
+
+  return ctx.reply("▶️ El ingreso de nuevos usuarios ha sido reanudado. Se continúa con el proceso de aceptación.");
+});
+
 // --- BLOQUE ÚNICO: Manejo de solicitudes de unión con validación y reglamento ---
 bot.on('chat_join_request', async (ctx) => {
   const chatId = String(ctx.chat.id);
@@ -162,6 +229,14 @@ bot.on('chat_join_request', async (ctx) => {
   if (!grupo || !gruposAutorizados.has(chatId)) {
     console.log(`⚠️ Solicitud en grupo no autorizado: ${chatId}`);
     return;
+  }
+
+  // 👇 Si el grupo está pausado, guardar en espera
+  if (grupo.pausado) {
+    const user = ctx.chatJoinRequest.from;
+    gruposPendientes.set(user.id, { chatId, user });
+    console.log(`⏸️ Solicitud en espera: ${user.first_name} (${user.id})`);
+    return autoDelete(ctx, `⏸️ Usuario *${user.first_name}* quedó en espera porque el grupo está pausado.`);
   }
 
   const user = ctx.chatJoinRequest.from;
@@ -215,7 +290,8 @@ bot.on('chat_join_request', async (ctx) => {
       }
     });
   }
-}); 
+});
+
 // --- BLOQUE ÚNICO: Manejo de aceptación/rechazo y botón Ban ---
 bot.on('callback_query', async (ctx) => {
   const data = ctx.callbackQuery.data;
@@ -292,15 +368,6 @@ bot.start((ctx) => {
 });
 
 // --- BLOQUE 9: GBAN y funciones auxiliares ---
-async function esAdminDelGrupo(ctx, userId) {
-  try {
-    const admins = await ctx.getChatAdministrators();
-    return admins.some(admin => admin.user.id === userId);
-  } catch {
-    return false;
-  }
-}
-
 bot.command('gban', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) {
@@ -328,6 +395,7 @@ bot.command('gban', async (ctx) => {
     return ctx.reply("⚠️ Uso: `/gban <id_usuario | @usuario> [motivo]` o responde al mensaje del usuario.", { parse_mode: "Markdown" });
   }
 
+  // 🚨 Ban global en todos los grupos activos
   for (const [chatId, grupo] of gruposActivos.entries()) {
     try {
       await ctx.telegram.banChatMember(chatId, userId);
@@ -339,9 +407,15 @@ bot.command('gban', async (ctx) => {
         { parse_mode: "Markdown" }
       );
 
-      setTimeout(() => {
-        ctx.telegram.deleteMessage(chatId, sent.message_id).catch(() => {});
-      }, 300000);
+      // ⏱️ Borrar el mensaje en cada grupo después de 3 minutos
+      setTimeout(async () => {
+        try {
+          await ctx.telegram.deleteMessage(chatId, sent.message_id);
+          console.log(`🗑️ Mensaje de GBAN eliminado en grupo ${grupo.nombre} (${chatId})`);
+        } catch (err) {
+          console.error(`❌ Error al borrar mensaje en grupo ${chatId}:`, err.message);
+        }
+      }, 180000); // 180000 ms = 3 minutos
 
     } catch (err) {
       console.error(`❌ Error al banear en grupo ${chatId}:`, err.message);
