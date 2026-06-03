@@ -293,28 +293,20 @@ bot.on('callback_query', async (ctx) => {
 // --- BLOQUE 8: Comando /start ---
 bot.start((ctx) => {
   const chatId = String(ctx.chat.id);
+  console.log("➡️ /start recibido en chat:", chatId);
 
   if (ctx.chat.type === "private") {
     return ctx.reply(
       "✅ El bot se ha iniciado correctamente.\n\n" +
-      "📋 **Menú de Comandos Disponibles**\n\n" +
+      "📋 **Menú de Comandos Disponibles en Privado**\n\n" +
       "⚡ **/start** → Inicia el bot y muestra este menú.\n" +
-      "⏸️ **/pausar** → Pausa el ingreso de nuevos usuarios.\n" +
-      "▶️ **/activo** → Reanuda el ingreso de usuarios.\n" +
-      "🚨 **/gban** → Ban global.\n" +
-      "✅ **/gunban** → Quita ban global.\n" +
-      "ℹ️ **/info** → Información de usuario.\n" +
-      "🚨 **/ban** → Ban local.\n" +
-      "✅ **/unban** → Quita ban local.\n" +
-      "⚠️ **/warn** → Advertencia local (ban automático al acumular 3).\n" +
-      "✅ **/unwarn** → Reinicia advertencias.\n" +
-      "🔇 **/mute** → Silencia usuario.\n" +
-      "✅ **/unmute** → Quita silencio.\n\n" +
-      "👉 Usa estos comandos dentro de los grupos."
+      "ℹ️ **/info <id | @usuario>** → Muestra información del usuario y los grupos donde está.\n\n" +
+      "👉 Los demás comandos solo funcionan dentro de los grupos de la federación."
       , { parse_mode: "Markdown" }
     );
   }
 
+  // Caso normal: cuando se ejecuta en un grupo
   const idStr = String(chatId);
   if (gruposAutorizados.has(idStr)) {
     const grupo = gruposActivos.get(idStr);
@@ -332,6 +324,18 @@ bot.start((ctx) => {
     });
   }
 });
+
+// --- BLOQUE EXTRA: Middleware para comandos en privado ---
+bot.use((ctx, next) => {
+  if (ctx.chat.type === "private" && ctx.message && ctx.message.text) {
+    const comando = ctx.message.text.split(" ")[0];
+    if (comando.startsWith("/") && comando !== "/start" && comando !== "/info") {
+      return ctx.reply("⚠️ Este comando solo puede usarse dentro de los grupos de la federación.");
+    }
+  }
+  return next();
+});
+
 
 // --- BLOQUE 9: GBAN y GUNBAN ---
 bot.command('gban', async (ctx) => {
@@ -417,34 +421,47 @@ bot.command('gunban', async (ctx) => {
 });
 
 // --- BLOQUE 10: Comandos adicionales ---
+// --- BLOQUE EXTRA: Comando /info ---
 bot.command('info', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
-  if (!esAdmin) return ctx.reply("❌ Solo los administradores pueden usar este comando.");
+  if (!esAdmin) {
+    return ctx.reply("❌ Solo los administradores pueden usar este comando.");
+  }
 
   const args = ctx.message.text.split(" ").slice(1);
-  let userId;
+  let userId, username = "";
+
   if (args[0]) {
-    if (/^\d+$/.test(args[0])) userId = Number(args[0]);
-    else if (args[0].startsWith("@")) {
-      return ctx.reply("⚠️ El comando /info requiere ID numérico, no username.");
+    if (/^\d+$/.test(args[0])) {
+      userId = Number(args[0]);
+    } else if (args[0].startsWith("@")) {
+      username = args[0].replace("@", "");
     }
   }
-  if (!userId) return ctx.reply("⚠️ Uso: `/info <id_usuario>`", { parse_mode: "Markdown" });
+
+  if (!userId && !username) {
+    return ctx.reply("⚠️ Uso: `/info <id_usuario | @usuario>`", { parse_mode: "Markdown" });
+  }
+
+  let infoCompilada = `📌 *Información de Usuario*\n\n`;
 
   for (const [chatId, grupo] of gruposActivos.entries()) {
     try {
-      const miembro = await ctx.telegram.getChatMember(chatId, userId).catch(() => null);
-
-      if (!miembro) {
-        await ctx.reply(`ℹ️ No conozco al usuario en ${grupo.nombre} (ID: ${chatId}).`);
-        continue;
+      let miembro;
+      if (userId) {
+        miembro = await ctx.telegram.getChatMember(chatId, userId).catch(() => null);
+      } else if (username) {
+        miembro = await ctx.telegram.getChatMember(chatId, username).catch(() => null);
       }
 
+      if (!miembro) continue;
+
+      // 🔎 Buscar estadísticas de actividad si existen
       const claveUsuario = `${chatId}:${miembro.user.id}`;
       let ultimaActividad = "(sin registro)";
       let tiempoInactivo = "(sin registro)";
 
-      if (estadisticasUsuarios.has(claveUsuario)) {
+      if (estadisticasUsuarios && estadisticasUsuarios.has(claveUsuario)) {
         const datos = estadisticasUsuarios.get(claveUsuario);
         ultimaActividad = datos.ultimaActividad.toLocaleString();
         const ahora = new Date();
@@ -453,23 +470,28 @@ bot.command('info', async (ctx) => {
         tiempoInactivo = `${diffDias} día(s)`;
       }
 
-      const infoUsuario =
-        `📌 *Información de Usuario*\n` +
+      infoCompilada +=
         `🆔 ID: ${miembro.user.id}\n` +
         `👤 Nombre: ${miembro.user.first_name || ""} ${miembro.user.last_name || ""}\n` +
         `🔖 Username: ${miembro.user.username ? `@${miembro.user.username}` : "(sin username)"}\n` +
-        `🌐 Grupo: ${grupo.nombre}\n` +
-        `📊 Estado: ${miembro.status}\n` +
+        `🌐 Grupo: ${grupo.nombre} (ID: ${chatId})\n` +
+        `📅 Fecha de ingreso: ${grupo.fechaInicio}\n` +
         `🕒 Último mensaje: ${ultimaActividad}\n` +
-        `⏳ Tiempo de inactividad: ${tiempoInactivo}`;
+        `⏳ Días de inactividad: ${tiempoInactivo}\n\n`;
 
-      await ctx.reply(infoUsuario, { parse_mode: "Markdown" });
     } catch (err) {
-      console.error(`❌ Error en grupo ${chatId}:`, err.message);
+      console.error(`❌ Error al obtener info en grupo ${chatId}:`, err.message);
     }
   }
+
+  if (infoCompilada.trim() === "📌 *Información de Usuario*") {
+    return ctx.reply("ℹ️ Usuario no encontrado en ningún grupo de la federación.");
+  }
+
+  return ctx.reply(infoCompilada, { parse_mode: "Markdown" });
 });
 
+//COMANDO BAN
 bot.command('ban', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) return ctx.reply("❌ Solo los administradores pueden usar este comando.");
