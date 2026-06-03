@@ -299,8 +299,7 @@ bot.start((ctx) => {
     return ctx.reply(
       "✅ El bot se ha iniciado correctamente.\n\n" +
       "📋 **Menú de Comandos Disponibles en Privado**\n\n" +
-      "⚡ **/start** → Inicia el bot y muestra este menú.\n" +
-      "ℹ️ **/info <id | @usuario>** → Muestra información del usuario y los grupos donde está.\n\n" +
+      "⚡ **/start** → Inicia el bot y muestra este menú.\n\n" +
       "👉 Los demás comandos solo funcionan dentro de los grupos de la federación."
       , { parse_mode: "Markdown" }
     );
@@ -329,7 +328,7 @@ bot.start((ctx) => {
 bot.use((ctx, next) => {
   if (ctx.chat.type === "private" && ctx.message && ctx.message.text) {
     const comando = ctx.message.text.split(" ")[0];
-    if (comando.startsWith("/") && comando !== "/start" && comando !== "/info") {
+    if (comando.startsWith("/") && comando !== "/start") {
       return ctx.reply("⚠️ Este comando solo puede usarse dentro de los grupos de la federación.");
     }
   }
@@ -443,52 +442,54 @@ bot.command('info', async (ctx) => {
     return ctx.reply("⚠️ Uso: `/info <id_usuario | @usuario>`", { parse_mode: "Markdown" });
   }
 
-  let infoCompilada = `📌 *Información de Usuario*\n\n`;
+  const chatId = String(ctx.chat.id);
+  const grupo = gruposActivos.get(chatId);
+  if (!grupo) {
+    return ctx.reply("⚠️ Este grupo no está autorizado.");
+  }
 
-  for (const [chatId, grupo] of gruposActivos.entries()) {
-    try {
-      let miembro;
-      if (userId) {
-        miembro = await ctx.telegram.getChatMember(chatId, userId).catch(() => null);
-      } else if (username) {
-        miembro = await ctx.telegram.getChatMember(chatId, username).catch(() => null);
-      }
-
-      if (!miembro) continue;
-
-      // 🔎 Buscar estadísticas de actividad si existen
-      const claveUsuario = `${chatId}:${miembro.user.id}`;
-      let ultimaActividad = "(sin registro)";
-      let tiempoInactivo = "(sin registro)";
-
-      if (estadisticasUsuarios && estadisticasUsuarios.has(claveUsuario)) {
-        const datos = estadisticasUsuarios.get(claveUsuario);
-        ultimaActividad = datos.ultimaActividad.toLocaleString();
-        const ahora = new Date();
-        const diffMs = ahora - datos.ultimaActividad;
-        const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-        tiempoInactivo = `${diffDias} día(s)`;
-      }
-
-      infoCompilada +=
-        `🆔 ID: ${miembro.user.id}\n` +
-        `👤 Nombre: ${miembro.user.first_name || ""} ${miembro.user.last_name || ""}\n` +
-        `🔖 Username: ${miembro.user.username ? `@${miembro.user.username}` : "(sin username)"}\n` +
-        `🌐 Grupo: ${grupo.nombre} (ID: ${chatId})\n` +
-        `📅 Fecha de ingreso: ${grupo.fechaInicio}\n` +
-        `🕒 Último mensaje: ${ultimaActividad}\n` +
-        `⏳ Días de inactividad: ${tiempoInactivo}\n\n`;
-
-    } catch (err) {
-      console.error(`❌ Error al obtener info en grupo ${chatId}:`, err.message);
+  try {
+    let miembro;
+    if (userId) {
+      miembro = await ctx.telegram.getChatMember(chatId, userId).catch(() => null);
+    } else if (username) {
+      miembro = await ctx.telegram.getChatMember(chatId, username).catch(() => null);
     }
-  }
 
-  if (infoCompilada.trim() === "📌 *Información de Usuario*") {
-    return ctx.reply("ℹ️ Usuario no encontrado en ningún grupo de la federación.");
-  }
+    if (!miembro) {
+      return ctx.reply("ℹ️ Usuario no encontrado en este grupo.");
+    }
 
-  return ctx.reply(infoCompilada, { parse_mode: "Markdown" });
+    // 🔎 Buscar estadísticas de actividad si existen
+    const claveUsuario = `${chatId}:${miembro.user.id}`;
+    let ultimaActividad = "(sin registro)";
+    let tiempoInactivo = "(sin registro)";
+
+    if (estadisticasUsuarios && estadisticasUsuarios.has(claveUsuario)) {
+      const datos = estadisticasUsuarios.get(claveUsuario);
+      ultimaActividad = datos.ultimaActividad.toLocaleString();
+      const ahora = new Date();
+      const diffMs = ahora - datos.ultimaActividad;
+      const diffDias = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      tiempoInactivo = `${diffDias} día(s)`;
+    }
+
+    const infoCompilada =
+      `📌 *Información de Usuario*\n\n` +
+      `🆔 ID: ${miembro.user.id}\n` +
+      `👤 Nombre: ${miembro.user.first_name || ""} ${miembro.user.last_name || ""}\n` +
+      `🔖 Username: ${miembro.user.username ? `@${miembro.user.username}` : "(sin username)"}\n` +
+      `🌐 Grupo: ${grupo.nombre} (ID: ${chatId})\n` +
+      `📅 Fecha de ingreso: ${grupo.fechaInicio}\n` +
+      `🕒 Último mensaje: ${ultimaActividad}\n` +
+      `⏳ Días de inactividad: ${tiempoInactivo}`;
+
+    return ctx.reply(infoCompilada, { parse_mode: "Markdown" });
+
+  } catch (err) {
+    console.error(`❌ Error al obtener info en grupo ${chatId}:`, err.message);
+    return ctx.reply("❌ Error al obtener la información del usuario.");
+  }
 });
 
 //COMANDO BAN
