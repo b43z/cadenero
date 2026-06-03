@@ -320,19 +320,49 @@ bot.on('callback_query', async (ctx) => {
   if (data.startsWith("acepto|")) {
     const [ , chatId, userIdStr ] = data.split("|");
     const userId = Number(userIdStr);
-    await ctx.telegram.approveChatJoinRequest(chatId, userId);
-    actualizarGrupo(chatId, 1, 0);
-    await ctx.answerCbQuery("✅ Has aceptado el reglamento. Bienvenido!");
-    autoDelete(ctx, `👋 Bienvenido al grupo! (ID: ${userId})`);
+
+    try {
+      await ctx.telegram.approveChatJoinRequest(chatId, userId);
+
+      // Borra el mensaje en el chat privado
+      await ctx.deleteMessage(ctx.callbackQuery.message.message_id);
+
+      // Cierra el popup del botón y fuerza que el chat quede en primer plano
+      await ctx.answerCbQuery("✅ Has aceptado el reglamento. Bienvenido!", { show_alert: true });
+
+      // Mensaje en el grupo confirmando ingreso
+      await ctx.telegram.sendMessage(
+        chatId,
+        `👋 Bienvenido *${ctx.from.first_name}* (ID: ${userId}) al grupo!`,
+        { parse_mode: "Markdown" }
+      );
+    } catch (err) {
+      console.error("❌ Error al aprobar solicitud:", err.message);
+    }
   }
 
   if (data.startsWith("rechazo|")) {
     const [ , chatId, userIdStr ] = data.split("|");
     const userId = Number(userIdStr);
-    await ctx.telegram.declineChatJoinRequest(chatId, userId);
-    actualizarGrupo(chatId, 0, 1);
-    await ctx.answerCbQuery("❌ Has rechazado el reglamento. No podrás ingresar.");
-    autoDelete(ctx, `🚫 Usuario (ID: ${userId}) rechazó el reglamento.`);
+
+    try {
+      await ctx.telegram.declineChatJoinRequest(chatId, userId);
+
+      // Borra el mensaje en el chat privado
+      await ctx.deleteMessage(ctx.callbackQuery.message.message_id);
+
+      // Cierra el popup del botón y fuerza que el chat quede en primer plano
+      await ctx.answerCbQuery("❌ Has rechazado el reglamento. No podrás ingresar.", { show_alert: true });
+
+      // Mensaje en el grupo confirmando rechazo
+      await ctx.telegram.sendMessage(
+        chatId,
+        `🚫 Usuario (ID: ${userId}) rechazó el reglamento.`,
+        { parse_mode: "Markdown" }
+      );
+    } catch (err) {
+      console.error("❌ Error al rechazar solicitud:", err.message);
+    }
   }
 
   if (data.startsWith("ban|")) {
@@ -351,6 +381,7 @@ bot.on('callback_query', async (ctx) => {
     }
   }
 });
+
 // --- BLOQUE 8: Comando /start ---
 bot.start((ctx) => {
   const chatId = String(ctx.chat.id);
