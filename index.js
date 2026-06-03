@@ -190,7 +190,7 @@ bot.on('chat_join_request', async (ctx) => {
     `☠️ No estés de preguntón si no vas a comprar\n\n` +
     `¿Aceptas el reglamento para ingresar?`;
 
-  try {
+   try {
     await ctx.telegram.sendMessage(user.id, mensajeReglamento, {
       parse_mode: "Markdown",
       reply_markup: {
@@ -201,20 +201,21 @@ bot.on('chat_join_request', async (ctx) => {
       }
     });
   } catch (err) {
-  console.error("❌ No se pudo enviar mensaje privado:", err.message);
-  autoDelete(ctx, {
-    text: mensajeReglamento,
-    options: {
-      parse_mode: "Markdown",
-      reply_markup: {
-        inline_keyboard: [
-          [{ text: "✅ Acepto", callback_data: `acepto_${chatId}_${user.id}` }],
-          [{ text: "❌ No acepto", callback_data: `rechazo_${chatId}_${user.id}` }]
-        ]
+    console.error("❌ No se pudo enviar mensaje privado:", err.message);
+    autoDelete(ctx, {
+      text: mensajeReglamento,
+      options: {
+        parse_mode: "Markdown",
+        reply_markup: {
+          inline_keyboard: [
+            [{ text: "✅ Acepto", callback_data: `acepto_${chatId}_${user.id}` }],
+            [{ text: "❌ No acepto", callback_data: `rechazo_${chatId}_${user.id}` }]
+          ]
+        }
       }
-    }
-  });
-}
+    });
+  }
+}); 
 // --- BLOQUE ÚNICO: Manejo de aceptación/rechazo y botón Ban ---
 bot.on('callback_query', async (ctx) => {
   const data = ctx.callbackQuery.data;
@@ -371,3 +372,4 @@ process.on('unhandledRejection', (reason, promise) => {
 });
 
 console.log("✅ Bot inicializado correctamente con Webhook en Railway.");
+
