@@ -17,10 +17,13 @@ const FILE_GRUPOS = 'gruposActivos.json';
 
 async function guardarGrupos() {
   try {
-    await fs.promises.writeFile(
-      FILE_GRUPOS,
-      JSON.stringify(Object.fromEntries(gruposActivos), null, 2)
-    );
+    // Convertir todas las claves a string antes de guardar
+    const obj = {};
+    for (const [id, grupo] of gruposActivos.entries()) {
+      obj[String(id)] = grupo;
+    }
+
+    await fs.promises.writeFile(FILE_GRUPOS, JSON.stringify(obj, null, 2));
     console.log("💾 gruposActivos guardados en JSON.");
   } catch (err) {
     console.error("❌ Error al guardar grupos:", err.message);
@@ -32,7 +35,8 @@ function cargarGrupos() {
     const data = fs.readFileSync(FILE_GRUPOS, "utf8");
     const grupos = JSON.parse(data);
 
-    for (const [idStr, grupo] of Object.entries(grupos)) {
+    for (const [id, grupo] of Object.entries(grupos)) {
+      const idStr = String(id);
       gruposActivos.set(idStr, { ...grupo, id: idStr });
       gruposAutorizados.add(idStr);
     }
