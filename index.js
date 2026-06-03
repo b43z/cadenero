@@ -252,7 +252,7 @@ bot.on('chat_join_request', async (ctx) => {
 
   const mensajeReglamento =
     `👋 Hola *${user.first_name}*!\n\n` +
-    `Propósito del grupo:\nEste grupo es para platicar y conocer personas, relajarse como en una cantina, encontrar todo tipo de gente y en ocasiones pláticas polémicas. No es un chat XXX ni para buscar sexo explícitamente.\n\n` +
+    `Propósito del grupo:\nEste grupo es para platicar, conocer personas, y relajarse tirando cotorreo y carrilla, puedes encontrar todo tipo de gente y en ocasiones pláticas polémicas, puede estar inactivo o muy activo depende de los horarios de los participantes no esperes ingresar y ser el centro de atencion. No es un chat XXX ni para buscar sexo explícitamente puede ocurrir que alguien comparta su material por gusto propio o que se acepte a vendedoras pero no es una obligatorio.\n\n` +
     `📖 REGLAMENTO\n` +
     `💀 No mandar fotopitos al grupo\n` +
     `💀 Si no estás activo con regularidad serás expulsado\n` +
@@ -260,7 +260,7 @@ bot.on('chat_join_request', async (ctx) => {
     `☠️ Prohibido compartir links (ban automático)\n` +
     `☠️ Ser mayor de edad (+18)\n` +
     `☠️ Prohibido CP y materiales ilegales\n` +
-    `🚨 Si vendes contenido verifícate con un adm\n` +
+    `🚨 Si vendes contenido primero pregunta su te lo permite, y verifícate con un adm. para pactar como hacerlo \n` +
     `☠️ No acosar en privado\n` +
     `☠️ No estés de preguntón si no vas a comprar\n\n` +
     `¿Aceptas el reglamento para ingresar?`;
