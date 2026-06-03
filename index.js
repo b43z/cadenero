@@ -351,6 +351,7 @@ bot.on('callback_query', async (ctx) => {
 bot.start((ctx) => {
   const chatId = String(ctx.chat.id);
   console.log("➡️ /start recibido en chat:", chatId);
+  console.log("🔎 gruposAutorizados actuales:", [...gruposAutorizados]);
 
   if (ctx.chat.type === "private") {
     return ctx.reply(
@@ -365,8 +366,11 @@ bot.start((ctx) => {
     );
   }
 
-  if (gruposAutorizados.has(chatId)) {
-    const grupo = gruposActivos.get(chatId);
+  // Normalización: asegurar que el chatId esté en formato string
+  const idStr = String(chatId);
+
+  if (gruposAutorizados.has(idStr)) {
+    const grupo = gruposActivos.get(idStr);
     return autoDelete(ctx, {
       text:
         `👋 Hola, este bot está activo en el grupo *${grupo?.nombre || "Sin nombre"}*.\n\n` +
@@ -375,6 +379,7 @@ bot.start((ctx) => {
       options: { parse_mode: "Markdown" }
     });
   } else {
+    console.warn("⚠️ El grupo no está autorizado. chatId:", idStr);
     return autoDelete(ctx, {
       text: "⚠️ Este grupo no está en la lista de autorizados.",
       options: {}
