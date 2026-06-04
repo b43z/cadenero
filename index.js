@@ -176,7 +176,7 @@ bot.on('chat_join_request', async (ctx) => {
       return autoDelete(ctx, `🚫 Usuario *${user.first_name}* fue rechazado por nombre inválido.`);
     }
 
-    // Mensaje de reglamento
+    // Mensaje de reglamento (por privado)
     const mensajeReglamento = escapeMarkdownV2(obtenerReglamento(chatId)) +
       "\n\n¿Aceptas el reglamento para ingresar?";
 
@@ -191,16 +191,21 @@ bot.on('chat_join_request', async (ctx) => {
     });
   } catch (err) {
     console.error("❌ Error al procesar chat_join_request:", err.message);
-    try {
-      const chatId = String(ctx.chat.id);
-      const user = ctx.chatJoinRequest.from;
-      await ctx.telegram.declineChatJoinRequest(chatId, user.id);
-      autoDelete(ctx, `⚠️ Usuario *${user.first_name}* debe abrir chat con el bot para ingresar. Solicitud rechazada.`);
-    } catch (err2) {
-      console.error("❌ Error adicional al rechazar solicitud:", err2.message);
-    }
+    const chatId = String(ctx.chat.id);
+    const user = ctx.chatJoinRequest.from;
+
+    // En lugar de rechazar, avisamos en el grupo
+    await ctx.telegram.sendMessage(
+      chatId,
+      `⚠️ Usuario *${user.first_name}* debe abrir chat con el bot (enviar /start en privado) para recibir el reglamento y poder ingresar.`,
+      { parse_mode: "MarkdownV2" }
+    );
+
+    // Dejamos la solicitud pendiente (no aprobamos ni rechazamos)
+    gruposPendientes.set(user.id, { chatId, user, tipo: "pendiente" });
   }
 }); // <-- cierre correcto del bloque
+
 
 // --- BLOQUE 6: Manejo de botones de aceptación/rechazo y ban ---
 bot.on("callback_query", async (ctx) => {
