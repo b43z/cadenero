@@ -256,36 +256,43 @@ bot.on("callback_query", async (ctx) => {
   }
 }); // <-- cierre correcto
 
-// --- BLOQUE 8: Comando /start ---
+// --- BLOQUE 8: Comando /start adaptado ---
 bot.start((ctx) => {
   const chatId = String(ctx.chat.id);
   const grupo = gruposActivos.get(chatId);
+  const esGrupo = ctx.chat.type.endsWith("group");
 
-  // Estadísticas del grupo
-  const estadisticas = 
-    `👋 Hola, este bot está activo en el grupo *${grupo?.nombre || "Sin nombre"}*.\n\n` +
-    `📊 Usuarios procesados: ${grupo?.usuariosProcesados || 0}\n` +
-    `🚫 Usuarios rechazados: ${grupo?.usuariosRechazados || 0}\n\n`;
+  // Estadísticas del grupo (solo si está en grupo)
+  const estadisticasGrupo = esGrupo
+    ? `👋 Este bot está activo en el grupo *${grupo?.nombre || "Sin nombre"}*.\n\n` +
+      `📊 Usuarios procesados: ${grupo?.usuariosProcesados || 0}\n` +
+      `🚫 Usuarios rechazados: ${grupo?.usuariosRechazados || 0}\n\n`
+    : "";
 
-  // Menú de comandos con explicación (iconos convencionales)
-  const menuComandos =
-    `📜 *Menú de comandos disponibles*\n\n` +
-    `➡️ /start – Muestra estadísticas del grupo y este menú\n` +
-    `⚙️ /setreglamento <platica|contenido> – Configura el tipo de reglamento\n` +
-    `⏸️ /pausar – Pausa el ingreso de nuevos usuarios\n` +
-    `▶️ /activo – Reactiva el ingreso de usuarios\n` +
-    `📂 /grupos – Lista los grupos activos y autorizados\n` +
-    `🛠️ /setcomando – Registra comandos en BotFather\n` +
-    `📖 /setreglamento – Muestra y configura el reglamento del grupo\n` +
-    `❓ /help – Explicación rápida de cada comando\n`;
+  // Menú según contexto
+  const menuComandos = esGrupo
+    ? `📜 *Menú de comandos del grupo*\n\n` +
+      `➡️ /start – Muestra estadísticas del grupo y este menú\n` +
+      `⚙️ /setreglamento – Configura o muestra el reglamento del grupo\n` +
+      `⏸️ /pausar – Pausa el ingreso de nuevos usuarios\n` +
+      `▶️ /activo – Reactiva el ingreso de usuarios\n` +
+      `📂 /grupos – Lista los grupos activos y autorizados\n` +
+      `❓ /help – Explicación rápida de cada comando\n`
+    : `👋 Hola, soy el portero del grupo.\n\n` +
+      `📜 *Comandos disponibles en privado*\n\n` +
+      `➡️ /start – Muestra este menú\n` +
+      `📖 /setreglamento – Configura el reglamento del grupo (solo admins)\n` +
+      `❓ /help – Explicación rápida de cada comando\n\n` +
+      `⚠️ Para ingresar a un grupo, primero debes aceptar el reglamento que te enviaré aquí en privado.`;
 
-  const mensajeFinal = estadisticas + menuComandos;
+  const mensajeFinal = estadisticasGrupo + menuComandos;
 
   return autoDelete(ctx, {
     text: escapeMarkdownV2(mensajeFinal),
     options: { parse_mode: "MarkdownV2" }
   });
 });
+
 
 // --- BLOQUE 9: GBAN y GUNBAN ---
 // Función auxiliar para resolver usernames a IDs
