@@ -49,20 +49,7 @@ function cargarGrupos() {
   }
 }
 cargarGrupos();
-// --- BLOQUE 3: Validaciones y utilidades ---
-function nombreInvalido(nombre) {
-  const prohibidos = ["http", "https", "www", ".com", ".net", ".org"];
-  const limpio = nombre.trim();
-  if (prohibidos.some(p => limpio.toLowerCase().includes(p))) return true;
-  if (limpio.length < 3) return true;
-  if (/^\d+$/.test(limpio)) return true;
-  if (/^[\p{P}]+$/u.test(limpio)) return true;
-  if (/^[\p{S}]+$/u.test(limpio)) return true;
-  if (/[\u{1F600}-\u{1F64F}]/u.test(limpio)) return true;
-  if (/(.)\1{2,}/.test(limpio)) return true;
-  return false;
-}
-
+// --- BLOQUE 3: Función autoDelete y escape MarkdownV2 ---
 function autoDelete(ctx, mensaje) {
   const chatId = String(ctx.chat.id);
 
@@ -134,6 +121,7 @@ async function esAdminDelGrupo(ctx, userId) {
     return false;
   }
 }
+
 // --- BLOQUE 4: Procesamiento de usuarios directos ---
 async function procesarUsuario(ctx, user) {
   const chatId = String(ctx.chat.id);
