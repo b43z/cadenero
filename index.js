@@ -93,6 +93,38 @@ function autoDelete(ctx, mensaje) {
     }, 240000);
   });
 }
+
+// Función para escapar caracteres reservados en MarkdownV2
+function escapeMarkdownV2(text) {
+  return text
+    .replace(/_/g, "\\_")
+    .replace(/\*/g, "\\*")
+    .replace(/
+
+\[/g, "\
+
+\[")
+    .replace(/\]
+
+/g, "\\]
+
+")
+    .replace(/\(/g, "\\(")
+    .replace(/\)/g, "\\)")
+    .replace(/~/g, "\\~")
+    .replace(/`/g, "\\`")
+    .replace(/>/g, "\\>")
+    .replace(/#/g, "\\#")
+    .replace(/\+/g, "\\+")
+    .replace(/-/g, "\\-")
+    .replace(/=/g, "\\=")
+    .replace(/\|/g, "\\|")
+    .replace(/\{/g, "\\{")
+    .replace(/\}/g, "\\}")
+    .replace(/\./g, "\\.")
+    .replace(/!/g, "\\!");
+}
+
 async function esAdminDelGrupo(ctx, userId) {
   try {
     const miembro = await ctx.telegram.getChatMember(ctx.chat.id, userId);
@@ -167,8 +199,6 @@ bot.command('activo', async (ctx) => {
   guardarGrupos();
   return ctx.reply("▶️ El ingreso de nuevos usuarios ha sido reanudado.");
 });
-// --- BLOQUE 6: Manejo de solicitudes de unión con reglamento obligatorio ---
-// Función para obtener el reglamento configurado del grupo desde reglamentos.json
 function obtenerReglamento(chatId) {
   const grupo = gruposActivos.get(chatId);
   if (!grupo) return "📖 No hay reglamento configurado para este grupo.";
@@ -203,8 +233,8 @@ bot.on('chat_join_request', async (ctx) => {
     return autoDelete(ctx, `🚫 Usuario *${user.first_name}* fue rechazado por nombre inválido.`);
   }
 
-  const mensajeReglamento = obtenerReglamento(chatId) + 
-    `\n\n¿Aceptas el reglamento para ingresar?`;
+  const mensajeReglamento = escapeMarkdownV2(obtenerReglamento(chatId)) + 
+    "\n\n¿Aceptas el reglamento para ingresar?";
 
   try {
     await ctx.telegram.sendMessage(user.id, mensajeReglamento, {
@@ -222,6 +252,7 @@ bot.on('chat_join_request', async (ctx) => {
     autoDelete(ctx, `⚠️ Usuario *${user.first_name}* debe abrir chat con el bot para ingresar. Solicitud rechazada.`);
   }
 });
+
 // --- BLOQUE 7: Manejo de callback_query (unificado) ---
 bot.on("callback_query", async (ctx) => {
   const data = ctx.callbackQuery.data;
@@ -258,47 +289,34 @@ bot.on("callback_query", async (ctx) => {
 // --- BLOQUE 8: Comando /start ---
 bot.start((ctx) => {
   const chatId = String(ctx.chat.id);
-  console.log("➡️ /start recibido en chat:", chatId);
+  const grupo = gruposActivos.get(chatId);
 
-  if (ctx.chat.type === "private") {
-    return ctx.reply(
-      "✅ El bot se ha iniciado correctamente.\n\n" +
-      "📋 **Comandos Disponibles**\n\n" +
-      "⚡ **/start** → Inicia el bot y muestra este menú.\n" +
-      "ℹ️ **/info <id | @usuario>** → Muestra información del usuario.\n" +
-      "⏸️ **/pausar** → Pausa el ingreso de nuevos usuarios.\n" +
-      "▶️ **/activo** → Reanuda el ingreso de usuarios.\n" +
-      "🚨 **/gban <id | @usuario> [motivo]** → Ban global.\n" +
-      "✅ **/gunban <id | @usuario> [motivo]** → Quita ban global.\n" +
-      "🚫 **/ban <id | @usuario> [motivo]** → Ban local.\n" +
-      "✅ **/unban <id_usuario> [motivo]** → Quita ban local.\n" +
-      "⚠️ **/warn <id | @usuario> [motivo]** → Asigna warn.\n" +
-      "✅ **/unwarn <id_usuario> [motivo]** → Elimina warns.\n" +
-      "🔇 **/mute <id | @usuario> [motivo]** → Silencia usuario.\n" +
-      "✅ **/unmute <id | @usuario> [motivo]** → Quita mute.\n" +
-      "📖 **/setreglamento <platica|contenido>** → Configura el reglamento del grupo.\n\n" +
-      "👉 *Nota:* Excepto `/start`, todos estos comandos solo funcionan dentro de los grupos."
-      , { parse_mode: "MarkdownV2" }
-    );
-  }
+  // Estadísticas del grupo
+  const estadisticas = 
+    `👋 Hola, este bot está activo en el grupo *${grupo?.nombre || "Sin nombre"}*.\n\n` +
+    `📊 Usuarios procesados: ${grupo?.usuariosProcesados || 0}\n` +
+    `🚫 Usuarios rechazados: ${grupo?.usuariosRechazados || 0}\n\n`;
 
-  const idStr = String(chatId);
-  if (gruposAutorizados.has(idStr)) {
-    const grupo = gruposActivos.get(idStr);
-    return autoDelete(ctx, {
-      text:
-        `👋 Hola, este bot está activo en el grupo *${grupo?.nombre || "Sin nombre"}*.\n\n` +
-        `📊 Usuarios procesados: ${grupo?.usuariosProcesados || 0}\n` +
-        `🚫 Usuarios rechazados: ${grupo?.usuariosRechazados || 0}`,
-      options: { parse_mode: "MarkdownV2" }
-    });
-  } else {
-    return autoDelete(ctx, {
-      text: "⚠️ Este grupo no está en la lista de autorizados.",
-      options: {}
-    });
-  }
+  // Menú de comandos con explicación (iconos convencionales)
+  const menuComandos =
+    `📜 *Menú de comandos disponibles*\n\n` +
+    `➡️ /start – Muestra estadísticas del grupo y este menú\n` +
+    `⚙️ /setreglamento <platica|contenido> – Configura el tipo de reglamento\n` +
+    `⏸️ /pausar – Pausa el ingreso de nuevos usuarios\n` +
+    `▶️ /activo – Reactiva el ingreso de usuarios\n` +
+    `📂 /grupos – Lista los grupos activos y autorizados\n` +
+    `🛠️ /setcomando – Registra comandos en BotFather\n` +
+    `📖 /setreglamento – Muestra y configura el reglamento del grupo\n` +
+    `❓ /help – Explicación rápida de cada comando\n`;
+
+  const mensajeFinal = estadisticas + menuComandos;
+
+  return autoDelete(ctx, {
+    text: escapeMarkdownV2(mensajeFinal),
+    options: { parse_mode: "MarkdownV2" }
+  });
 });
+
 // --- BLOQUE 9: GBAN y GUNBAN ---
 // Función auxiliar para resolver usernames a IDs
 async function resolveUserId(ctx, chatId, username) {
