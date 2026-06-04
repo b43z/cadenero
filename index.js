@@ -134,6 +134,25 @@ function nombreInvalido(nombre) {
     letraMasSimbolo.test(nombre)
   );
 }
+// --- BLOQUE 4bis: Función para obtener reglamento ---
+const fs = require("fs");
+
+function obtenerReglamento(chatId) {
+  const grupo = gruposActivos.get(chatId);
+  if (!grupo) return "📖 No hay reglamento configurado para este grupo.";
+
+  try {
+    const data = fs.readFileSync("reglamentos.json", "utf8");
+    const reglamentos = JSON.parse(data);
+
+    // tipoReglamento puede ser "platica", "contenido", etc.
+    const tipo = grupo.tipoReglamento || "default";
+    return reglamentos[tipo] || reglamentos["default"];
+  } catch (err) {
+    console.error("❌ Error al leer reglamentos:", err.message);
+    return "📖 Reglamento por defecto: Respeta a los demás miembros.";
+  }
+}
 
 // --- BLOQUE 5: Manejo de solicitudes de ingreso ---
 bot.on('chat_join_request', async (ctx) => {
