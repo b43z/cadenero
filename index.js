@@ -49,7 +49,7 @@ function cargarGrupos() {
   }
 }
 cargarGrupos();
-// --- BLOQUE 3: Función autoDelete y escape MarkdownV2 ---
+// --- BLOQUE 3: Funciones utilitarias ---
 function autoDelete(ctx, mensaje) {
   const chatId = String(ctx.chat.id);
 
@@ -81,7 +81,7 @@ function autoDelete(ctx, mensaje) {
   });
 }
 
-// Función para escapar caracteres reservados en MarkdownV2
+// Escapar caracteres reservados en MarkdownV2
 function escapeMarkdownV2(text) {
   return text
     .replace(/_/g, "\\_")
@@ -102,16 +102,6 @@ function escapeMarkdownV2(text) {
     .replace(/\}/g, "\\}")
     .replace(/\./g, "\\.")
     .replace(/!/g, "\\!");
-}
-
-async function esAdminDelGrupo(ctx, userId) {
-  try {
-    const miembro = await ctx.telegram.getChatMember(ctx.chat.id, userId);
-    return ["administrator", "creator"].includes(miembro.status);
-  } catch (err) {
-    console.error("❌ Error al verificar admin:", err.message);
-    return false;
-  }
 }
 
 
@@ -160,40 +150,28 @@ async function procesarUsuario(ctx, user) {
     }
   });
 }
-// --- BLOQUE 5: Comandos de pausa y reanudación ---
-bot.command('pausar', async (ctx) => {
-  const chatId = String(ctx.chat.id);
-  const grupo = gruposActivos.get(chatId);
-  if (!grupo) return ctx.reply("⚠️ Este grupo no está autorizado.");
-  grupo.pausado = true;
-  gruposActivos.set(chatId, grupo);
-  guardarGrupos();
-  return ctx.reply("⏸️ El ingreso de nuevos usuarios ha sido pausado.");
-});
-
-bot.command('activo', async (ctx) => {
-  const chatId = String(ctx.chat.id);
-  const grupo = gruposActivos.get(chatId);
-  if (!grupo) return ctx.reply("⚠️ Este grupo no está autorizado.");
-  grupo.pausado = false;
-  gruposActivos.set(chatId, grupo);
-  guardarGrupos();
-  return ctx.reply("▶️ El ingreso de nuevos usuarios ha sido reanudado.");
-});
-function obtenerReglamento(chatId) {
-  const grupo = gruposActivos.get(chatId);
-  if (!grupo) return "📖 No hay reglamento configurado para este grupo.";
-
+// --- BLOQUE 5: Manejo de solicitudes de ingreso ---
+bot.on('chat_join_request', async (ctx) => {
   try {
-    const data = fs.readFileSync("reglamentos.json", "utf8");
-    const reglamentos = JSON.parse(data);
-    const tipo = grupo.tipoReglamento || "default";
-    return reglamentos[tipo] || reglamentos["default"];
-  } catch (err) {
-    console.error("❌ Error al leer reglamentos:", err.message);
-    return "📖 Reglamento por defecto: Respeta a los demás miembros.";
-  }
-}
+    const chatId = String(ctx.chat.id);
+    const grupo = gruposActivos.get(chatId);
+    if (!grupo || !gruposAutorizados.has(chatId)) return;
+
+    const user = ctx.chatJoinRequest.from;
+
+    // Si el grupo está pausado
+    if (grupo.pausado) {
+      gruposPendientes.set(user.id, { chatId, user, tipo: "solicitud" });
+      return autoDelete(ctx, `⏸️ Usuario *${user.first_name}* quedó en espera porque el grupo está pausado.`);
+    }
+
+    // Validación de nombre inválido
+    if (nombreInvalido(user.first_name)) {
+      await ctx.telegram.declineChatJoinRequest(chatId, user.id);
+      grupo.usuariosRechazados = (grupo.usuariosRechazados || 0) + 1;
+      guardarGrupos();
+      return autoDelete(ctx, `🚫 Usuario *${user.first_name}* fue rechazado por nombre inválido.`);
+    }
 
 // --- BLOQUE: Manejo de solicitudes de ingreso ---
 bot.on('chat_join_request', async (ctx) => {
@@ -218,7 +196,7 @@ bot.on('chat_join_request', async (ctx) => {
       return autoDelete(ctx, `🚫 Usuario *${user.first_name}* fue rechazado por nombre inválido.`);
     }
 
-    // Mensaje de reglamento
+   // Mensaje de reglamento
     const mensajeReglamento = escapeMarkdownV2(obtenerReglamento(chatId)) +
       "\n\n¿Aceptas el reglamento para ingresar?";
 
@@ -234,7 +212,6 @@ bot.on('chat_join_request', async (ctx) => {
   } catch (err) {
     console.error("❌ Error al procesar chat_join_request:", err.message);
     try {
-      // Si falla el envío de privado, rechazar solicitud
       const chatId = String(ctx.chat.id);
       const user = ctx.chatJoinRequest.from;
       await ctx.telegram.declineChatJoinRequest(chatId, user.id);
@@ -244,7 +221,26 @@ bot.on('chat_join_request', async (ctx) => {
     }
   }
 });
+// --- BLOQUE 6: Manejo de botones de aceptación/rechazo ---
+bot.on('callback_query', async (ctx) => {
+  try {
+    const data = ctx.callbackQuery.data;
+    const [accion, chatId, userId] = data.split("|");
 
+    if (accion === "acepto") {
+      await ctx.telegram.approveChatJoinRequest(chatId, userId);
+      await ctx.answerCbQuery("✅ Has aceptado el reglamento. Bienvenido!");
+      await ctx.telegram.sendMessage(chatId, `🎉 Usuario *${ctx.from.first_name}* fue aprobado y ya puede ingresar.`, { parse_mode: "MarkdownV2" });
+    } else if (accion === "rechazo") {
+      await ctx.telegram.declineChatJoinRequest(chatId, userId);
+      await ctx.answerCbQuery("❌ Has rechazado el reglamento. Solicitud cancelada.");
+      await ctx.telegram.sendMessage(chatId, `🚫 Usuario *${ctx.from.first_name}* rechazó el reglamento y no ingresará.`, { parse_mode: "MarkdownV2" });
+    }
+  } catch (err) {
+    console.error("❌ Error al procesar callback_query:", err.message);
+    await ctx.answerCbQuery("⚠️ Hubo un error al procesar tu respuesta.");
+  }
+});
 
 // --- BLOQUE 7: Manejo de callback_query (unificado) ---
 bot.on("callback_query", async (ctx) => {
