@@ -16,27 +16,32 @@ const mensajesActivos = new Map(); // chatId -> array de message_id
 
 const FILE_GRUPOS = 'gruposActivos.json';
 
-// Textos de Reglamentos de la Comunidad
+// Textos de Reglamentos de la Comunidad (Formato corregido y optimizado)
 const REGLAMENTOS = {
-  1: `💀 Este grupo es para pláticas y cotorreo, sin censura, pero **NO es un grupo XXX, HOT ni de encuentros**.  
-Si buscas eso aquí, **evita que te demos BAN**.  
-Recuerda: no siempre hay cotorreo.
+  1: `💬 *REGLAMENTO: SÓLO COTORREO* 💬
+Este es un grupo para pláticas y desmadre. **NO es un espacio XXX, HOT ni de encuentros.**
 
-⚰️ REGLAMENTO ⚰️
-💀 Al ingresar **Preséntate**, no esperes ser el centro de atención  
-💀 **PROHIBIDO FOTOPITOS** en el grupo  
-💀 **NO CP, Gore, Zoo ni materiales ilegales** 💀 Prohibido **Anunciar, Vender, Pedir o Compartir links o grupos sin autorización** 💀 No Morbo, NvXNv, Chantajes, Hackeos, **fotopollas por error** 💀 No acoses pidiendo **PV o Agg sin cotorrear** 💀 ¿Vendes contenido? → **Pide permiso a un Admin y verifícate antes de promoverte** 💀 Puedes compartir tu material **+18 propio**, pero será eliminado pasado un tiempo  
-💀 Si no estás activo y solo eres de “mueble” → **Expulsión** 💀 Compras bajo tu **propio riesgo**, el grupo o los admins no tienen ingerencia en las ventas  
-💀 No confundas **cotorreo con bullying**`,
+⚰️ *NORMAS DE CONVIVENCIA* ⚰️
+💀 **Preséntate:** Al ingresar interactúa, no seas un "mueble" o serás expulsado.
+💀 **Estrictamente prohibido:** Enviar fotopitos, CP, Gore, Zoo, etc.
+💀 **Sin Spam:** Prohibido ventas, pedir o compartir links/grupos sin autorización de un Admin.
+💀 **Creadoras de Contenido:** Si vendes material, pide permiso a un Admin y verifícate antes de promocionarte.
+💀 **Material Temporal:** Se permite compartir material propio temporalmente (se borrará después).
+💀 **Respeta el Privado:** No acoses en PV a los miembros sin antes haber cotorreado en el grupo. No se toleran chantajes ni hackeos.
+💀 **Garantía:** Compras bajo tu propio riesgo; el grupo y los admins no interfieren en ventas.
+💀 **Límites:** No confundas el cotorreo con el bullying.`,
 
-  2: `💀 Este grupo es para cotorreo caliente, pero no para estar de morbosos, es para conocer gente caliente
-Chicas que venden Contenido y ver que sale para pasarla chido
+  2: `🔥 *REGLAMENTO: COTORREO HOT* 🔥
+Espacio para conocer gente, interactuar de forma caliente y promover contenido, sin caer en el morbo pesado.
 
-⚰️ REGLAMENTO ⚰️
-💀 Al ingresar no esperes ser el centro de atención  
-💀 **PROHIBIDO FOTOPITOS** en el grupo  
-💀 **NO CP, Gore, Zoo ni materiales ilegales** 💀 Prohibido **Anunciar, Vender, Pedir o Compartir links o grupos sin autorización** 💀 No Morbo, NvXNv, Chantajes, Hackeos, **fotopollas por error** 💀 No acoses pidiendo **PV o Agg sin cotorrear** 💀 ¿Vendes contenido? → **Pide permiso a un Admin y verifícate antes de promoverte** 💀 Puedes compartir tu material **+18 propio**, pero será eliminado pasado un tiempo  
-💀 Si no estás activo y solo eres de “mueble” → **Expulsión** 💀 Compras bajo tu **propio riesgo**, el grupo o los admins no tienen ingerencia en las ventas`
+⚰️ *NORMAS DE CONVIVENCIA* ⚰️
+💀 **Actividad:** Al ingresar intégrate al desmadre, evita quedarte de "mueble" o serás expulsado.
+💀 **Estrictamente prohibido:** Enviar fotopitos al grupo, pedir/vender CP, Gore, Zoo, etc.
+💀 **Sin Spam:** Prohibido ventas, pedir o compartir links/grupos sin autorización de un Admin.
+💀 **Creadoras de Contenido:** Si vendes material, pide permiso a un Admin y verifícate antes de promocionarte.
+💀 **Material Temporal:** Puedes compartir tu material +18 propio, pero se eliminará pasado un tiempo.
+💀 **No Acoso:** Respeta a los miembros; prohibido hostigar en PV, chantajes, NvXNv o hackeos.
+💀 **Garantía:** Las transacciones económicas son bajo tu propio riesgo; el staff no se hace responsable.`
 };
 
 function guardarGrupos() {
