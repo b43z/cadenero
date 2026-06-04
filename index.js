@@ -209,14 +209,35 @@ bot.on('chat_join_request', async (ctx) => {
 
     // Validación de nombre inválido
     if (nombreInvalido(user.first_name)) {
-      await ctx.telegram.declineChatJoinRequest(chatId, user.id);
-      grupo.usuariosRechazados = (grupo.usuariosRechazados || 0) + 1;
-      guardarGrupos();
-      return autoDelete(ctx, `🚫 Usuario *${user.first_name}* fue rechazado por nombre inválido.`);
+      try {
+        await ctx.telegram.declineChatJoinRequest(chatId, user.id);
+        grupo.usuariosRechazados = (grupo.usuariosRechazados || 0) + 1;
+        guardarGrupos();
+        return autoDelete(ctx, `🚫 Usuario *${user.first_name}* fue rechazado por nombre inválido.`);
+      } catch (err) {
+        console.error("❌ Error al rechazar solicitud:", err.message);
+      }
+      return;
     }
 
-    // Aprobar ingreso pero restringir permisos (solo lectura)
-    await ctx.telegram.approveChatJoinRequest(chatId, user.id);
+    // Intentar aprobar ingreso
+    try {
+      await ctx.telegram.approveChatJoinRequest(chatId, user.id);
+    } catch (err) {
+      if (err.message.includes("HIDE_REQUESTER_MISSING")) {
+        await ctx.telegram.sendMessage(
+          chatId,
+          `⚠️ El usuario *${user.first_name}* debe iniciar chat privado con el bot antes de poder ser aprobado.`,
+          { parse_mode: "MarkdownV2" }
+        );
+        return;
+      } else {
+        console.error("❌ Error al aprobar solicitud:", err.message);
+        return;
+      }
+    }
+
+    // Restringir permisos (solo lectura)
     await ctx.telegram.restrictChatMember(chatId, user.id, {
       can_send_messages: false,
       can_send_media_messages: false,
