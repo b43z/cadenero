@@ -221,67 +221,60 @@ bot.on('chat_join_request', async (ctx) => {
     }
   }
 });
-// --- BLOQUE 6: Manejo de botones de aceptación/rechazo ---
-bot.on('callback_query', async (ctx) => {
+// --- BLOQUE 6: Manejo de botones de aceptación/rechazo y ban ---
+bot.on("callback_query", async (ctx) => {
   try {
     const data = ctx.callbackQuery.data;
-    const [accion, chatId, userId] = data.split("|");
 
-    if (accion === "acepto") {
+    // Aceptar reglamento
+    if (data.startsWith("acepto|")) {
+      const [ , chatId, userIdStr ] = data.split("|");
+      const userId = Number(userIdStr);
       await ctx.telegram.approveChatJoinRequest(chatId, userId);
-      await ctx.answerCbQuery("✅ Has aceptado el reglamento. Bienvenido!");
+      await ctx.answerCbQuery("✅ Has aceptado el reglamento.", { show_alert: true });
       await ctx.telegram.sendMessage(
         chatId,
         `🎉 Usuario *${ctx.from.first_name}* fue aprobado y ya puede ingresar.`,
         { parse_mode: "MarkdownV2" }
       );
-    } else if (accion === "rechazo") {
+    }
+
+    // Rechazar reglamento
+    else if (data.startsWith("rechazo|")) {
+      const [ , chatId, userIdStr ] = data.split("|");
+      const userId = Number(userIdStr);
       await ctx.telegram.declineChatJoinRequest(chatId, userId);
-      await ctx.answerCbQuery("❌ Has rechazado el reglamento. Solicitud cancelada.");
+      await ctx.answerCbQuery("❌ Has rechazado el reglamento.", { show_alert: true });
       await ctx.telegram.sendMessage(
         chatId,
-        `🚫 Usuario *${ctx.from.first_name}* rechazó el reglamento y no ingresará.`,
+        `🚫 Usuario (ID: ${userId}) rechazó el reglamento.`,
         { parse_mode: "MarkdownV2" }
       );
+    }
+
+    // Banear usuario
+    else if (data.startsWith("ban|")) {
+      const [ , userIdStr ] = data.split("|");
+      const userId = Number(userIdStr);
+      try {
+        await ctx.telegram.banChatMember(ctx.chat.id, userId);
+        await ctx.answerCbQuery("🚨 Usuario baneado.", { show_alert: true });
+        await ctx.telegram.sendMessage(
+          ctx.chat.id,
+          `🚨 Usuario (ID: ${userId}) ha sido baneado.`,
+          { parse_mode: "MarkdownV2" }
+        );
+      } catch (err) {
+        console.error("❌ Error al banear:", err.message);
+        await ctx.answerCbQuery("❌ Error al banear.", { show_alert: true });
+      }
     }
   } catch (err) {
     console.error("❌ Error al procesar callback_query:", err.message);
     await ctx.answerCbQuery("⚠️ Hubo un error al procesar tu respuesta.");
   }
-}); // <-- cierre correcto del bloque
-// --- BLOQUE 7: Manejo de callback_query (unificado) ---
-bot.on("callback_query", async (ctx) => {
-  const data = ctx.callbackQuery.data;
+}); // <-- cierre correcto y único
 
-  if (data.startsWith("acepto|")) {
-    const [ , chatId, userIdStr ] = data.split("|");
-    const userId = Number(userIdStr);
-    await ctx.telegram.approveChatJoinRequest(chatId, userId);
-    await ctx.answerCbQuery("✅ Has aceptado el reglamento.", { show_alert: true });
-    await ctx.telegram.sendMessage(chatId, `👋 Bienvenido al grupo!`, { parse_mode: "MarkdownV2" });
-  }
-
-  if (data.startsWith("rechazo|")) {
-    const [ , chatId, userIdStr ] = data.split("|");
-    const userId = Number(userIdStr);
-    await ctx.telegram.declineChatJoinRequest(chatId, userId);
-    await ctx.answerCbQuery("❌ Has rechazado el reglamento.", { show_alert: true });
-    await ctx.telegram.sendMessage(chatId, `🚫 Usuario (ID: ${userId}) rechazó el reglamento.`, { parse_mode: "MarkdownV2" });
-  }
-
-  if (data.startsWith("ban|")) {
-    const [ , userIdStr ] = data.split("|");
-    const userId = Number(userIdStr);
-    try {
-      await ctx.telegram.banChatMember(ctx.chat.id, userId);
-      await ctx.answerCbQuery("🚨 Usuario baneado.", { show_alert: true });
-      await ctx.telegram.sendMessage(ctx.chat.id, `🚨 Usuario (ID: ${userId}) ha sido baneado.`, { parse_mode: "MarkdownV2" });
-    } catch (err) {
-      console.error("❌ Error al banear:", err.message);
-      await ctx.answerCbQuery("❌ Error al banear.", { show_alert: true });
-    }
-  }
-});
 // --- BLOQUE 8: Comando /start ---
 bot.start((ctx) => {
   const chatId = String(ctx.chat.id);
