@@ -135,7 +135,6 @@ function nombreInvalido(nombre) {
   );
 }
 // --- BLOQUE 4bis: Función para obtener reglamento ---
-const fs = require("fs");
 
 function obtenerReglamento(chatId) {
   const grupo = gruposActivos.get(chatId);
