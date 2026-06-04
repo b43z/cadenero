@@ -81,26 +81,26 @@ function nombreInvalido(nombre) {
   const limpio = nombre.trim();
   const sinEspacios = limpio.replace(/\s+/g, '');
 
+  // 1. Filtro estricto contra enlaces o spam evidente
   if (prohibidos.some(p => limpio.toLowerCase().includes(p))) return true;
-  if (sinEspacios.length < 3) return true;
-  if (/^\d+$/.test(sinEspacios)) return true;
-  if (/^[\p{P}]+$/u.test(sinEspacios)) return true;
-  if (/^[\p{S}]+$/u.test(sinEspacios)) return true;
-  if (/^\p{Emoji}+$/u.test(sinEspacios)) return true;
-  if (/^[a-zA-Z]\s+[a-zA-Z]$/i.test(limpio) || /^[a-zA-Z]\s+[a-zA-Z]\s+[a-zA-Z]$/i.test(limpio)) return true;
-
-  if (sinEspacios.length <= 4) {
-    const tieneVocal = /[aeiouáéíóúüy]/i.test(sinEspacios);
-    if (!tieneVocal) return true;
-  }
-
-  if (/(.)\1{2,}/.test(sinEspacios)) return true;
-
-  // Filtro de Alfabetos No Latinos (Chino, Árabe, Cirílico, etc.)
+  
+  // 2. Extracción de letras base ignorando números, espacios, puntuación, símbolos y emojis
   const soloTexto = limpio.replace(/[\d\s\p{P}\p{S}\p{Emoji}]/gu, '');
-  if (soloTexto.length > 0) {
-    const regexLatina = /^[\p{Script=Latin}]+$/u;
-    if (!regexLatina.test(soloTexto)) return true;
+  
+  // Exigir que tenga al menos 3 letras reales
+  if (soloTexto.length < 3) return true;
+  
+  // Filtro de Alfabetos No Latinos en el texto real (Chino, Árabe, Cirílico, etc.)
+  const regexLatina = /^[\p{Script=Latin}]+$/u;
+  if (!regexLatina.test(soloTexto)) return true;
+
+  // 3. Validaciones secundarias sobre estructura
+  if (/^\d+$/.test(sinEspacios)) return true;
+  if (/(.)\1{2,}/.test(sinEspacios)) return true; // Evita repetición exagerada (ej. Lluuuuna)
+
+  if (soloTexto.length <= 4) {
+    const tieneVocal = /[aeiouáéíóúüy]/i.test(soloTexto);
+    if (!tieneVocal) return true;
   }
 
   return false;
@@ -255,6 +255,7 @@ bot.on('chat_member', async (ctx) => {
 bot.on('callback_query', async (ctx) => {
   const data = ctx.callbackQuery.data;
   const userId = ctx.from.id;
+  const messageId = ctx.callbackQuery.message.message_id;
 
   if (data.startsWith("ban_")) {
     const targetUid = String(data.split("_")[1]);
@@ -283,7 +284,14 @@ bot.on('callback_query', async (ctx) => {
       await ctx.telegram.approveChatJoinRequest(targetChatId, userId);
       actualizarGrupo(targetChatId, 1, 0);
 
-      await ctx.editMessageText(`✅ ¡Perfecto! Has aceptado el reglamento. Ya puedes ingresar y participar en *${grupoNombre}*.`);
+      // Eliminar el mensaje de reglamento con botones inmediatamente del chat privado del bot
+      await ctx.deleteMessage(messageId).catch(() => {});
+
+      // Enviar mensaje informativo limpio y efímero en el privado
+      const msgConfirmacion = await ctx.reply(`✅ ¡Perfecto! Has aceptado el reglamento. Ya puedes ingresar y participar en *${grupoNombre}*.`);
+      setTimeout(() => {
+        ctx.deleteMessage(msgConfirmacion.message_id).catch(() => {});
+      }, 6000);
 
       const username = ctx.from.username ? `@${ctx.from.username}` : "(sin username)";
       
@@ -316,7 +324,13 @@ bot.on('callback_query', async (ctx) => {
     try {
       await ctx.telegram.declineChatJoinRequest(targetChatId, userId);
       actualizarGrupo(targetChatId, 0, 1);
+      
+      // Cambiar el texto a denegado y borrarlo completamente poco después para vaciar el chat del bot
       await ctx.editMessageText("❌ Has rechazado el reglamento. Tu solicitud de acceso al grupo fue denegada.");
+      setTimeout(() => {
+        ctx.deleteMessage(messageId).catch(() => {});
+      }, 5000);
+
     } catch (err) {
       console.error("❌ Error al declinar vía botón:", err.message);
       await ctx.answerCbQuery("La solicitud ya expiró o fue procesada.", { show_alert: true });
