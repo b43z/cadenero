@@ -428,7 +428,7 @@ bot.command('gban', async (ctx) => {
       await ctx.telegram.banChatMember(String(chatId), userId);
       await ctx.telegram.sendMessage(
         String(chatId),
-        `🚨 <b>GBAN Federación CANCERBERUS</b>\n🆔 Usuario: <code>${userId}</code> ${username}\n🏷️ Grupo: ${grupo.nombre}\n📝 Motivo: ${motivo}`,
+        `🚨 <b>GBAN Federación</b>\n🆔 Usuario: <code>${userId}</code> ${username}\n🏷️ Grupo: ${grupo.nombre}\n📝 Motivo: ${motivo}`,
         { parse_mode: "HTML" }
       );
     } catch (err) {
@@ -479,6 +479,7 @@ bot.command('gunban', async (ctx) => {
     }
   }
 });
+
 // --- BLOQUE 11: Comando /grupos ---
 bot.command("grupos", (ctx) => {
   try {
