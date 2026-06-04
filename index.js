@@ -177,7 +177,7 @@ bot.on('chat_join_request', async (ctx) => {
     // Enviar mensaje con contador inicial
     let tiempoRestante = 5 * 60; // 5 minutos en segundos
     const mensaje = await ctx.telegram.sendMessage(chatId,
-      escapeMarkdownV2(`🎉 Bienvenido *${user.first_name}*.\n\nDebes aceptar las reglas en el chat del bot.\n⏱️ Tiempo restante: 5:00`),
+      escapeMarkdownV2(`🎉 Bienvenido *${user.first_name}*.\n\nDebes aceptar ver y aceptar las reglas, preciona rules para verlas .\n⏱️ Tiempo restante: 5:00`),
       {
         parse_mode: "MarkdownV2",
         reply_markup: {
@@ -232,6 +232,7 @@ bot.on('chat_join_request', async (ctx) => {
 });
 
 // --- BLOQUE 6: Manejo de aceptación/rechazo ---
+// --- BLOQUE 6: Manejo de aceptación/rechazo ---
 bot.on("callback_query", async (ctx) => {
   try {
     const data = ctx.callbackQuery.data;
@@ -251,6 +252,7 @@ bot.on("callback_query", async (ctx) => {
 
       await ctx.answerCbQuery("✅ Has aceptado el reglamento.", { show_alert: true });
       await ctx.deleteMessage();
+
     } else if (data.startsWith("rechazo|")) {
       const [ , chatIdStr, userIdStr ] = data.split("|");
       const chatId = Number(chatIdStr);
