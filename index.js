@@ -386,18 +386,20 @@ bot.start((ctx) => {
     options: { parse_mode: "MarkdownV2" }
   });
 });
+// --- BLOQUE 10: GBAN y GUNBAN FINAL DEFINITIVO ---
+const usuariosCache = new Map(); // username -> userId
 
-// --- BLOQUE 10: GBAN y GUNBAN corregido ---
-async function resolveUserId(ctx, chatId, username) {
-  try {
-    const targetUsername = username.replace("@", "");
-    const miembros = await ctx.telegram.getChatAdministrators(chatId);
-    const miembro = miembros.find(m => m.user.username?.toLowerCase() === targetUsername.toLowerCase());
-    return miembro?.user?.id || null;
-  } catch (err) {
-    console.error("❌ Error al resolver username:", err.message);
-    return null;
+// Cachear usuarios cada vez que escriben en cualquier grupo
+bot.on('message', (ctx) => {
+  if (ctx.from?.username) {
+    usuariosCache.set(ctx.from.username.toLowerCase(), ctx.from.id);
   }
+});
+
+// Resolver userId a partir de @usuario
+function resolveUserId(username) {
+  const targetUsername = username.replace("@", "").toLowerCase();
+  return usuariosCache.get(targetUsername) || null;
 }
 
 bot.command('gban', async (ctx) => {
@@ -412,15 +414,16 @@ bot.command('gban', async (ctx) => {
     userId = target.id;
     username = target.username ? `@${target.username}` : "";
   } else if (args[0]) {
-    if (/^\d+$/.test(args[0])) userId = Number(args[0]);
-    else if (args[0].startsWith("@")) {
+    if (/^\d+$/.test(args[0])) {
+      userId = parseInt(args[0], 10);
+    } else if (args[0].startsWith("@")) {
       username = args[0];
-      userId = await resolveUserId(ctx, ctx.chat.id, username);
+      userId = resolveUserId(username);
     }
   }
   if (args.length > 1) motivo = args.slice(1).join(" ");
   if (!userId) {
-    return ctx.reply("⚠️ Uso: /gban <id_usuario | @usuario> [motivo]", { parse_mode: "HTML" });
+    return ctx.reply(`⚠️ No se pudo resolver el usuario. Uso correcto: /gban <id_usuario | @usuario> [motivo]`, { parse_mode: "HTML" });
   }
 
   for (const [chatId, grupo] of gruposActivos.entries()) {
@@ -433,11 +436,6 @@ bot.command('gban', async (ctx) => {
       );
     } catch (err) {
       console.error(`❌ Error al banear en grupo ${chatId}:`, err.message);
-      await ctx.telegram.sendMessage(
-        String(chatId),
-        `❌ Error al banear al usuario <code>${userId}</code> en <b>${grupo.nombre}</b>: ${err.message}`,
-        { parse_mode: "HTML" }
-      );
     }
   }
 });
@@ -450,15 +448,16 @@ bot.command('gunban', async (ctx) => {
   let userId, motivo = "Sin motivo especificado", username = "";
 
   if (args[0]) {
-    if (/^\d+$/.test(args[0])) userId = Number(args[0]);
-    else if (args[0].startsWith("@")) {
+    if (/^\d+$/.test(args[0])) {
+      userId = parseInt(args[0], 10);
+    } else if (args[0].startsWith("@")) {
       username = args[0];
-      userId = await resolveUserId(ctx, ctx.chat.id, username);
+      userId = resolveUserId(username);
     }
   }
   if (args.length > 1) motivo = args.slice(1).join(" ");
   if (!userId) {
-    return ctx.reply("⚠️ Uso: /gunban <id_usuario | @usuario> [motivo]", { parse_mode: "HTML" });
+    return ctx.reply(`⚠️ No se pudo resolver el usuario. Uso correcto: /gunban <id_usuario | @usuario> [motivo]`, { parse_mode: "HTML" });
   }
 
   for (const [chatId, grupo] of gruposActivos.entries()) {
@@ -471,11 +470,6 @@ bot.command('gunban', async (ctx) => {
       );
     } catch (err) {
       console.error(`❌ Error al desbanear en grupo ${chatId}:`, err.message);
-      await ctx.telegram.sendMessage(
-        String(chatId),
-        `❌ Error al desbanear al usuario <code>${userId}</code> en <b>${grupo.nombre}</b>: ${err.message}`,
-        { parse_mode: "HTML" }
-      );
     }
   }
 });
