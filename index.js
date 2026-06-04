@@ -177,7 +177,7 @@ bot.on('chat_join_request', async (ctx) => {
     // Enviar mensaje con contador inicial
     let tiempoRestante = 5 * 60; // 5 minutos en segundos
     const mensaje = await ctx.telegram.sendMessage(chatId,
-      escapeMarkdownV2(`🎉 Bienvenido *${user.first_name}*.\n\nDebes aceptar ver y aceptar las reglas, preciona rules para verlas de lo contrario no podras participar .\n⏱️ Tiempo restante: 5:00`),
+      `⚠️ Presiona el botón *Reglas/Rules* para verlas y poder participar.\n⏱️ Tiempo restante: 5:00`,
       {
         parse_mode: "MarkdownV2",
         reply_markup: {
@@ -188,55 +188,55 @@ bot.on('chat_join_request', async (ctx) => {
       }
     );
 
-   // Actualizar contador cada minuto
-const interval = setInterval(async () => {
-  tiempoRestante -= 60;
-  const minutos = Math.floor(tiempoRestante / 60);
-  const segundos = tiempoRestante % 60;
-  const formato = `${minutos}:${segundos.toString().padStart(2, "0")}`;
+    // Actualizar contador cada minuto
+    const interval = setInterval(async () => {
+      tiempoRestante -= 60;
+      const minutos = Math.floor(tiempoRestante / 60);
+      const segundos = tiempoRestante % 60;
+      const formato = `${minutos}:${segundos.toString().padStart(2, "0")}`;
 
-  try {
-    await ctx.telegram.editMessageText(
-      chatId,
-      mensaje.message_id,
-      null,
-      "", // ← aquí ya no hay texto, quedó vacío
-      {
-        parse_mode: "MarkdownV2",
-        reply_markup: {
-          inline_keyboard: [
-            [{ text: "📜 Rules", url: `https://t.me/${ctx.botInfo.username}?start=${chatId}_${user.id}` }]
-          ]
-        }
-      }
-    );
-  } catch (err) {
-    console.error("❌ Error al actualizar contador:", err.message);
-  }
-
-  if (tiempoRestante <= 0) {
-    clearInterval(interval);
-    if (!usuariosProcesados.has(user.id)) {
       try {
-        await ctx.telegram.kickChatMember(chatId, user.id);
-        await ctx.telegram.sendMessage(
+        await ctx.telegram.editMessageText(
           chatId,
-          `⏱️ Usuario *${user.first_name}* fue expulsado por no aceptar las reglas a tiempo.`,
-          { parse_mode: "MarkdownV2" }
+          mensaje.message_id,
+          null,
+          `⚠️ Presiona el botón *Reglas/Rules* para verlas y poder participar.\n⏱️ Tiempo restante: ${formato}`,
+          {
+            parse_mode: "MarkdownV2",
+            reply_markup: {
+              inline_keyboard: [
+                [{ text: "📜 Rules", url: `https://t.me/${ctx.botInfo.username}?start=${chatId}_${user.id}` }]
+              ]
+            }
+          }
         );
       } catch (err) {
-        console.error("❌ Error al expulsar por timeout:", err.message);
+        console.error("❌ Error al actualizar contador:", err.message);
       }
-    }
-  }
-}, 60 * 1000); // cada minuto
 
+      if (tiempoRestante <= 0) {
+        clearInterval(interval);
+        if (!usuariosProcesados.has(user.id)) {
+          try {
+            await ctx.telegram.kickChatMember(chatId, user.id);
+            await ctx.telegram.sendMessage(
+              chatId,
+              `⏱️ Usuario *${user.first_name}* fue expulsado por no aceptar las reglas a tiempo.`,
+              { parse_mode: "MarkdownV2" }
+            );
+          } catch (err) {
+            console.error("❌ Error al expulsar por timeout:", err.message);
+          }
+        }
+        // borrar el mensaje del contador al terminar
+        await ctx.telegram.deleteMessage(chatId, mensaje.message_id).catch(() => {});
+      }
+    }, 60 * 1000); // cada minuto
   } catch (err) {
     console.error("❌ Error en chat_join_request:", err.message);
   }
 });
 
-// --- BLOQUE 6: Manejo de aceptación/rechazo ---
 // --- BLOQUE 6: Manejo de aceptación/rechazo ---
 bot.on("callback_query", async (ctx) => {
   try {
@@ -258,6 +258,9 @@ bot.on("callback_query", async (ctx) => {
       await ctx.answerCbQuery("✅ Has aceptado el reglamento.", { show_alert: true });
       await ctx.deleteMessage();
 
+      // borrar el mensaje del contador al aceptar
+      await ctx.telegram.deleteMessage(chatId, mensaje.message_id).catch(() => {});
+
     } else if (data.startsWith("rechazo|")) {
       const [ , chatIdStr, userIdStr ] = data.split("|");
       const chatId = Number(chatIdStr);
@@ -270,12 +273,14 @@ bot.on("callback_query", async (ctx) => {
       }
       await ctx.answerCbQuery("❌ Has rechazado el reglamento.", { show_alert: true });
       await ctx.deleteMessage();
+
+      // borrar el mensaje del contador al rechazar
+      await ctx.telegram.deleteMessage(chatId, mensaje.message_id).catch(() => {});
     }
   } catch (err) {
     console.error("❌ Error en callback_query:", err.message);
   }
 });
-
 // --- BLOQUE 8: Comando /start adaptado ---
 bot.start((ctx) => {
   const chatId = String(ctx.chat.id);
