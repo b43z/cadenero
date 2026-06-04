@@ -365,6 +365,28 @@ bot.command('setrules', async (ctx) => {
   return ctx.reply(`⚙️ *Configuración Aplicada*\nEste grupo ahora exigirá que se apruebe el *Reglamento ${seleccion}* en el chat privado antes de permitir el ingreso.`, { parse_mode: "Markdown" });
 });
 
+// 📖 Comando /reglas para mostrar el reglamento configurado con auto-delete
+bot.command('reglas', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+
+  if (ctx.chat.type === 'private') {
+    return ctx.reply("❌ Este comando solo funciona dentro de un grupo.");
+  }
+
+  if (!gruposActivos.has(chatId)) {
+    registrarGrupo(chatId, ctx.chat.title || "Grupo de Telegram");
+  }
+
+  const grupo = gruposActivos.get(chatId);
+  const numReglamento = grupo.reglamento || 1; 
+  const textoReglamento = REGLAMENTOS[numReglamento];
+
+  autoDelete(ctx, {
+    text: `📖 *Reglamento Vigente de: ${grupo.nombre}*\n\n${textoReglamento}`,
+    options: { parse_mode: "Markdown" }
+  });
+});
+
 bot.help((ctx) => {
   const manualAyuda = 
     `📖 *Manual de Comandos — Federación Cancerberos*\n\n` +
@@ -376,13 +398,18 @@ bot.help((ctx) => {
     `• *Descripción:* Cambia el reglamento del grupo (1 o 2) que los usuarios deben firmar en privado.\n` +
     `• *Sintaxis:* \`/setrules <1 o 2>\`\n` +
     `• *Quién:* Administradores.\n\n` +
+
+    `📖 *3. /reglas*\n` +
+    `• *Descripción:* Muestra las reglas actuales configuradas para este grupo. Desaparece en 4 minutos.\n` +
+    `• *Sintaxis:* \`/reglas\`\n` +
+    `• *Quién:* Cualquier miembro.\n\n` +
     
-    `🛡️ *3. /gban*\n` +
+    `🛡️ *4. /gban*\n` +
     `• *Descripción:* Ejecuta un baneo preventivo global en la red de grupos.\n` +
     `• *Sintaxis:* \`/gban <id_numérico> [motivo]\` o respondiendo al mensaje del infractor.\n` +
     `• *Quién:* Administradores.\n\n` +
     
-    `❓ *4. /help*\n` +
+    `❓ *5. /help*\n` +
     `• *Sintaxis:* \`/help\``;
 
   return ctx.reply(manualAyuda, { parse_mode: "Markdown" });
