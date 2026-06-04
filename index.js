@@ -262,31 +262,39 @@ bot.start((ctx) => {
   const grupo = gruposActivos.get(chatId);
   const esGrupo = ctx.chat.type.endsWith("group");
 
-  const estadisticasGrupo = esGrupo
-    ? `👋 Este bot está activo en el grupo *${grupo?.nombre || "Sin nombre"}*.\n\n` +
+  // Si es grupo → estadísticas + menú
+  if (esGrupo) {
+    const estadisticasGrupo =
+      `👋 Este bot está activo en el grupo *${grupo?.nombre || "Sin nombre"}*.\n\n` +
       `📊 Usuarios procesados: ${grupo?.usuariosProcesados || 0}\n` +
-      `🚫 Usuarios rechazados: ${grupo?.usuariosRechazados || 0}\n\n`
-    : "";
+      `🚫 Usuarios rechazados: ${grupo?.usuariosRechazados || 0}\n\n`;
 
-  const menuComandos = esGrupo
-    ? `📜 *Menú de comandos del grupo*\n\n` +
+    const menuComandos =
+      `📜 *Menú de comandos del grupo*\n\n` +
       `➡️ /start – Muestra estadísticas del grupo y este menú\n` +
       `⚙️ /setreglamento – Configura o muestra el reglamento del grupo\n` +
       `⏸️ /pausar – Pausa el ingreso de nuevos usuarios\n` +
       `▶️ /activo – Reactiva el ingreso de usuarios\n` +
       `📂 /grupos – Lista los grupos activos y autorizados\n` +
-      `❓ /help – Explicación rápida de cada comando\n`
-    : `👋 Hola, soy el portero del grupo.\n\n` +
-      `📜 *Comandos disponibles en privado*\n\n` +
-      `➡️ /start – Muestra este menú\n` +
-      `📖 /setreglamento – Configura el reglamento del grupo (solo admins)\n` +
-      `❓ /help – Explicación rápida de cada comando\n\n` +
-      `⚠️ Para ingresar a un grupo, primero debes aceptar el reglamento que te enviaré aquí en privado.`;
+      `❓ /help – Explicación rápida de cada comando\n`;
 
-  const mensajeFinal = estadisticasGrupo + menuComandos;
+    return autoDelete(ctx, {
+      text: escapeMarkdownV2(estadisticasGrupo + menuComandos),
+      options: { parse_mode: "MarkdownV2" }
+    });
+  }
+
+  // Si es privado → solo menú
+  const menuPrivado =
+    `👋 Hola, soy el portero del grupo.\n\n` +
+    `📜 *Comandos disponibles en privado*\n\n` +
+    `➡️ /start – Muestra este menú\n` +
+    `📖 /setreglamento – Configura el reglamento del grupo (solo admins)\n` +
+    `❓ /help – Explicación rápida de cada comando\n\n` +
+    `⚠️ Si vienes de un grupo, recibirás aquí el reglamento para aceptarlo.`;
 
   return autoDelete(ctx, {
-    text: escapeMarkdownV2(mensajeFinal),
+    text: escapeMarkdownV2(menuPrivado),
     options: { parse_mode: "MarkdownV2" }
   });
 });
@@ -315,6 +323,51 @@ bot.command("grupos", (ctx) => {
   } catch (err) {
     console.error("❌ Error en comando /grupos:", err.message);
     return autoDelete(ctx, "⚠️ Ocurrió un error al listar los grupos.");
+  }
+});
+
+// --- BLOQUE 10: Envío de reglamento en privado ---
+bot.on('chat_join_request', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  const user = ctx.chatJoinRequest.from;
+
+  try {
+    const mensajeReglamento = escapeMarkdownV2(obtenerReglamento(chatId)) +
+      "\n\n¿Aceptas el reglamento para ingresar?";
+
+    await ctx.telegram.sendMessage(user.id, mensajeReglamento, {
+      parse_mode: "MarkdownV2",
+      reply_markup: {
+        inline_keyboard: [
+          [{ text: "✅ Acepto", callback_data: `acepto|${chatId}|${user.id}` }],
+          [{ text: "❌ No acepto", callback_data: `rechazo|${chatId}|${user.id}` }]
+        ]
+      }
+    });
+  } catch (err) {
+    console.error("❌ Error al enviar reglamento:", err.message);
+  }
+});
+
+// --- BLOQUE 11: Callback de aceptación/rechazo ---
+bot.on("callback_query", async (ctx) => {
+  const data = ctx.callbackQuery.data;
+  const [accion, chatId, userId] = data.split("|");
+
+  try {
+    if (accion === "acepto") {
+      await ctx.telegram.approveChatJoinRequest(chatId, Number(userId));
+      await ctx.deleteMessage(); // borra el mensaje del reglamento
+      return ctx.answerCbQuery("✅ Has aceptado el reglamento. Bienvenido al grupo.");
+    }
+
+    if (accion === "rechazo") {
+      await ctx.telegram.declineChatJoinRequest(chatId, Number(userId));
+      await ctx.deleteMessage(); // borra el mensaje del reglamento
+      return ctx.answerCbQuery("❌ Has rechazado el reglamento. No podrás ingresar.");
+    }
+  } catch (err) {
+    console.error("❌ Error en callback:", err.message);
   }
 });
 // --- BLOQUE 9: GBAN y GUNBAN ---
