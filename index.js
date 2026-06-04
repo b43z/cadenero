@@ -173,30 +173,7 @@ bot.on('chat_join_request', async (ctx) => {
       return autoDelete(ctx, `🚫 Usuario *${user.first_name}* fue rechazado por nombre inválido.`);
     }
 
-// --- BLOQUE: Manejo de solicitudes de ingreso ---
-bot.on('chat_join_request', async (ctx) => {
-  try {
-    const chatId = String(ctx.chat.id);
-    const grupo = gruposActivos.get(chatId);
-    if (!grupo || !gruposAutorizados.has(chatId)) return;
-
-    const user = ctx.chatJoinRequest.from;
-
-    // Si el grupo está pausado, guardar en espera
-    if (grupo.pausado) {
-      gruposPendientes.set(user.id, { chatId, user, tipo: "solicitud" });
-      return autoDelete(ctx, `⏸️ Usuario *${user.first_name}* quedó en espera porque el grupo está pausado.`);
-    }
-
-    // Validación de nombre inválido
-    if (nombreInvalido(user.first_name)) {
-      await ctx.telegram.declineChatJoinRequest(chatId, user.id);
-      grupo.usuariosRechazados = (grupo.usuariosRechazados || 0) + 1;
-      guardarGrupos();
-      return autoDelete(ctx, `🚫 Usuario *${user.first_name}* fue rechazado por nombre inválido.`);
-    }
-
-   // Mensaje de reglamento
+    // Mensaje de reglamento
     const mensajeReglamento = escapeMarkdownV2(obtenerReglamento(chatId)) +
       "\n\n¿Aceptas el reglamento para ingresar?";
 
@@ -220,13 +197,13 @@ bot.on('chat_join_request', async (ctx) => {
       console.error("❌ Error adicional al rechazar solicitud:", err2.message);
     }
   }
-});
+}); // <-- cierre correcto del bloque
+
 // --- BLOQUE 6: Manejo de botones de aceptación/rechazo y ban ---
 bot.on("callback_query", async (ctx) => {
   try {
     const data = ctx.callbackQuery.data;
 
-    // Aceptar reglamento
     if (data.startsWith("acepto|")) {
       const [ , chatId, userIdStr ] = data.split("|");
       const userId = Number(userIdStr);
@@ -237,10 +214,7 @@ bot.on("callback_query", async (ctx) => {
         `🎉 Usuario *${ctx.from.first_name}* fue aprobado y ya puede ingresar.`,
         { parse_mode: "MarkdownV2" }
       );
-    }
-
-    // Rechazar reglamento
-    else if (data.startsWith("rechazo|")) {
+    } else if (data.startsWith("rechazo|")) {
       const [ , chatId, userIdStr ] = data.split("|");
       const userId = Number(userIdStr);
       await ctx.telegram.declineChatJoinRequest(chatId, userId);
@@ -250,10 +224,7 @@ bot.on("callback_query", async (ctx) => {
         `🚫 Usuario (ID: ${userId}) rechazó el reglamento.`,
         { parse_mode: "MarkdownV2" }
       );
-    }
-
-    // Banear usuario
-    else if (data.startsWith("ban|")) {
+    } else if (data.startsWith("ban|")) {
       const [ , userIdStr ] = data.split("|");
       const userId = Number(userIdStr);
       try {
@@ -273,7 +244,7 @@ bot.on("callback_query", async (ctx) => {
     console.error("❌ Error al procesar callback_query:", err.message);
     await ctx.answerCbQuery("⚠️ Hubo un error al procesar tu respuesta.");
   }
-}); // <-- cierre correcto y único
+}); // <-- cierre correcto
 
 // --- BLOQUE 8: Comando /start ---
 bot.start((ctx) => {
