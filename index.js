@@ -387,7 +387,7 @@ bot.start((ctx) => {
   });
 });
 
-// --- BLOQUE 10: GBAN y GUNBAN ---
+// --- BLOQUE 10: GBAN y GUNBAN corregido ---
 async function resolveUserId(ctx, chatId, username) {
   try {
     const targetUsername = username.replace("@", "");
@@ -419,18 +419,25 @@ bot.command('gban', async (ctx) => {
     }
   }
   if (args.length > 1) motivo = args.slice(1).join(" ");
-  if (!userId) return ctx.reply("⚠️ Uso: `/gban <id_usuario | @usuario> [motivo]`", { parse_mode: "MarkdownV2" });
+  if (!userId) {
+    return ctx.reply("⚠️ Uso: /gban <id_usuario | @usuario> [motivo]", { parse_mode: "HTML" });
+  }
 
   for (const [chatId, grupo] of gruposActivos.entries()) {
     try {
-      await ctx.telegram.banChatMember(chatId, userId);
+      await ctx.telegram.banChatMember(String(chatId), userId);
       await ctx.telegram.sendMessage(
-        chatId,
-        escapeMarkdownV2(`🚨 *GBAN Federación*\n🆔 Usuario: ${userId} ${username}\n🏷️ Grupo: ${grupo.nombre}\n📝 Motivo: ${motivo}`),
-        { parse_mode: "MarkdownV2" }
+        String(chatId),
+        `🚨 <b>GBAN Federación CANCERBERUS</b>\n🆔 Usuario: <code>${userId}</code> ${username}\n🏷️ Grupo: ${grupo.nombre}\n📝 Motivo: ${motivo}`,
+        { parse_mode: "HTML" }
       );
     } catch (err) {
       console.error(`❌ Error al banear en grupo ${chatId}:`, err.message);
+      await ctx.telegram.sendMessage(
+        String(chatId),
+        `❌ Error al banear al usuario <code>${userId}</code> en <b>${grupo.nombre}</b>: ${err.message}`,
+        { parse_mode: "HTML" }
+      );
     }
   }
 });
@@ -450,22 +457,28 @@ bot.command('gunban', async (ctx) => {
     }
   }
   if (args.length > 1) motivo = args.slice(1).join(" ");
-  if (!userId) return ctx.reply("⚠️ Uso: `/gunban <id_usuario | @usuario> [motivo]`", { parse_mode: "MarkdownV2" });
+  if (!userId) {
+    return ctx.reply("⚠️ Uso: /gunban <id_usuario | @usuario> [motivo]", { parse_mode: "HTML" });
+  }
 
   for (const [chatId, grupo] of gruposActivos.entries()) {
     try {
-      await ctx.telegram.unbanChatMember(chatId, userId);
+      await ctx.telegram.unbanChatMember(String(chatId), userId);
       await ctx.telegram.sendMessage(
-        chatId,
-        escapeMarkdownV2(`✅ *GUNBAN Federación*\n🆔 Usuario: ${userId}\n🏷️ Grupo: ${grupo.nombre}\n📝 Motivo: ${motivo}`),
-        { parse_mode: "MarkdownV2" }
+        String(chatId),
+        `✅ <b>GUNBAN Federación</b>\n🆔 Usuario: <code>${userId}</code>\n🏷️ Grupo: ${grupo.nombre}\n📝 Motivo: ${motivo}`,
+        { parse_mode: "HTML" }
       );
     } catch (err) {
       console.error(`❌ Error al desbanear en grupo ${chatId}:`, err.message);
+      await ctx.telegram.sendMessage(
+        String(chatId),
+        `❌ Error al desbanear al usuario <code>${userId}</code> en <b>${grupo.nombre}</b>: ${err.message}`,
+        { parse_mode: "HTML" }
+      );
     }
   }
 });
-
 // --- BLOQUE 11: Comando /grupos ---
 bot.command("grupos", (ctx) => {
   try {
