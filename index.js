@@ -230,18 +230,25 @@ bot.on('callback_query', async (ctx) => {
     if (accion === "acepto") {
       await ctx.telegram.approveChatJoinRequest(chatId, userId);
       await ctx.answerCbQuery("✅ Has aceptado el reglamento. Bienvenido!");
-      await ctx.telegram.sendMessage(chatId, `🎉 Usuario *${ctx.from.first_name}* fue aprobado y ya puede ingresar.`, { parse_mode: "MarkdownV2" });
+      await ctx.telegram.sendMessage(
+        chatId,
+        `🎉 Usuario *${ctx.from.first_name}* fue aprobado y ya puede ingresar.`,
+        { parse_mode: "MarkdownV2" }
+      );
     } else if (accion === "rechazo") {
       await ctx.telegram.declineChatJoinRequest(chatId, userId);
       await ctx.answerCbQuery("❌ Has rechazado el reglamento. Solicitud cancelada.");
-      await ctx.telegram.sendMessage(chatId, `🚫 Usuario *${ctx.from.first_name}* rechazó el reglamento y no ingresará.`, { parse_mode: "MarkdownV2" });
+      await ctx.telegram.sendMessage(
+        chatId,
+        `🚫 Usuario *${ctx.from.first_name}* rechazó el reglamento y no ingresará.`,
+        { parse_mode: "MarkdownV2" }
+      );
     }
   } catch (err) {
     console.error("❌ Error al procesar callback_query:", err.message);
     await ctx.answerCbQuery("⚠️ Hubo un error al procesar tu respuesta.");
   }
-});
-
+}); // <-- cierre correcto del bloque
 // --- BLOQUE 7: Manejo de callback_query (unificado) ---
 bot.on("callback_query", async (ctx) => {
   const data = ctx.callbackQuery.data;
