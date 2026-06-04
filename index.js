@@ -172,24 +172,32 @@ function obtenerReglamento(chatId) {
   }
 }
 
-// --- BLOQUE 6: Wrapper global para autoDelete ---
-const originalReply = Telegraf.Context.prototype.reply;
-Telegraf.Context.prototype.reply = function(...args) {
-  return autoDelete(this, args.length === 1 ? args[0] : { text: args[0], options: args[1] });
-};
+// --- BLOQUE 6: Middleware global para autoDelete ---
+bot.use(async (ctx, next) => {
+  const originalReply = ctx.reply.bind(ctx);
+  const originalSendMessage = ctx.telegram.sendMessage.bind(ctx.telegram);
 
-const originalSendMessage = bot.telegram.sendMessage.bind(bot.telegram);
-bot.telegram.sendMessage = function(chatId, text, options) {
-  // Excluir mensajes con contador integrado
-  if (text.includes("Tiempo restante")) {
-    return originalSendMessage(chatId, text, options);
-  }
-  // En cualquier otro caso, aplicar autoDelete
-  return autoDelete(
-    { chat: { id: chatId }, telegram: bot.telegram, reply: (t, o) => originalSendMessage(chatId, t, o) },
-    { text, options }
-  );
-};
+  // Redefinimos ctx.reply para que siempre use autoDelete
+  ctx.reply = (...args) => {
+    const mensaje = args.length === 1 ? args[0] : { text: args[0], options: args[1] };
+    return autoDelete(ctx, mensaje);
+  };
+
+  // Redefinimos ctx.telegram.sendMessage
+  ctx.telegram.sendMessage = (chatId, text, options) => {
+    // Excluir mensajes con contador integrado
+    if (text.includes("Tiempo restante")) {
+      return originalSendMessage(chatId, text, options);
+    }
+    return autoDelete(
+      { chat: { id: chatId }, telegram: ctx.telegram, reply: (t, o) => originalSendMessage(chatId, t, o) },
+      { text, options }
+    );
+  };
+
+  await next();
+});
+
 // --- BLOQUE 7: Manejo de solicitudes de ingreso con contador ---
 bot.on('chat_join_request', async (ctx) => {
   try {
