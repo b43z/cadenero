@@ -386,90 +386,64 @@ bot.start((ctx) => {
     options: { parse_mode: "MarkdownV2" }
   });
 });
-// --- BLOQUE 10: GBAN y GUNBAN FINAL DEFINITIVO ---
-const usuariosCache = new Map(); // username -> userId
-
-// Cachear usuarios cada vez que escriben en cualquier grupo
-bot.on('message', (ctx) => {
-  if (ctx.from?.username) {
-    usuariosCache.set(ctx.from.username.toLowerCase(), ctx.from.id);
-  }
-});
-
-// Resolver userId a partir de @usuario
-function resolveUserId(username) {
-  const targetUsername = username.replace("@", "").toLowerCase();
-  return usuariosCache.get(targetUsername) || null;
-}
-
-bot.command('gban', async (ctx) => {
+// --- BLOQUE GBAN/GUNBAN FEDERACIÓN CANCERBEROS CON MOTIVO ---
+bot.command(['gban', 'gunban'], async (ctx) => {
+  const comando = ctx.message.text.split(" ")[0].toLowerCase(); // /gban o /gunban
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
-  if (!esAdmin) return ctx.reply("❌ Solo los administradores pueden usar este comando.");
+  if (!esAdmin) {
+    return ctx.reply("❌ Solo los administradores pueden usar este comando.");
+  }
 
   const args = ctx.message.text.split(" ").slice(1);
-  let userId, motivo = "Sin motivo especificado", username = "";
+  let userId, username = "", nombre = "", motivo = "Sin motivo especificado";
 
+  // Caso 1: responder a un mensaje
   if (ctx.message.reply_to_message) {
     const target = ctx.message.reply_to_message.from;
     userId = target.id;
     username = target.username ? `@${target.username}` : "";
-  } else if (args[0]) {
+    nombre = target.first_name || "";
+    if (args.length > 0) motivo = args.join(" ");
+  }
+  // Caso 2: ID numérico o @usuario
+  else if (args[0]) {
     if (/^\d+$/.test(args[0])) {
       userId = parseInt(args[0], 10);
     } else if (args[0].startsWith("@")) {
       username = args[0];
-      userId = resolveUserId(username);
+      const targetUsername = args[0].replace("@", "").toLowerCase();
+      userId = usuariosCache.get(targetUsername) || null;
+    } else {
+      nombre = args[0];
+      userId = usuariosCache.get(args[0].toLowerCase()) || null;
     }
-  }
-  if (args.length > 1) motivo = args.slice(1).join(" ");
-  if (!userId) {
-    return ctx.reply(`⚠️ No se pudo resolver el usuario. Uso correcto: /gban <id_usuario | @usuario> [motivo]`, { parse_mode: "HTML" });
+    if (args.length > 1) motivo = args.slice(1).join(" ");
   }
 
+  if (!userId) {
+    return ctx.reply(`⚠️ No se pudo resolver el usuario ${username || nombre}. Uso correcto: ${comando} <id_usuario | @usuario> [motivo] o responde a un mensaje.`, { parse_mode: "HTML" });
+  }
+
+  // Aplicar acción y notificar en cada grupo
   for (const [chatId, grupo] of gruposActivos.entries()) {
     try {
-      await ctx.telegram.banChatMember(String(chatId), userId);
-      await ctx.telegram.sendMessage(
-        String(chatId),
-        `🚨 <b>GBAN Federación</b>\n🆔 Usuario: <code>${userId}</code> ${username}\n🏷️ Grupo: ${grupo.nombre}\n📝 Motivo: ${motivo}`,
-        { parse_mode: "HTML" }
-      );
+      if (comando === '/gban') {
+        await ctx.telegram.banChatMember(String(chatId), userId);
+        await ctx.telegram.sendMessage(
+          String(chatId),
+          `🚨 <b>GBAN DE FEDERACIÓN CANCERBEROS</b>\n🆔 ID: <code>${userId}</code>\n👤 Usuario: ${username || nombre}\n🏷️ Grupo: ${grupo.nombre}\n📝 Motivo: ${motivo}`,
+          { parse_mode: "HTML" }
+        );
+      } else {
+        await ctx.telegram.unbanChatMember(String(chatId), userId);
+        await ctx.telegram.sendMessage(
+          String(chatId),
+          `✅ <b>GUNBAN DE FEDERACIÓN CANCERBEROS</b>\n🆔 ID: <code>${userId}</code>\n👤 Usuario: ${username || nombre}\n🏷️ Grupo: ${grupo.nombre}\n📝 Motivo: ${motivo}`,
+          { parse_mode: "HTML" }
+        );
+      }
     } catch (err) {
-      console.error(`❌ Error al banear en grupo ${chatId}:`, err.message);
-    }
-  }
-});
-
-bot.command('gunban', async (ctx) => {
-  const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
-  if (!esAdmin) return ctx.reply("❌ Solo los administradores pueden usar este comando.");
-
-  const args = ctx.message.text.split(" ").slice(1);
-  let userId, motivo = "Sin motivo especificado", username = "";
-
-  if (args[0]) {
-    if (/^\d+$/.test(args[0])) {
-      userId = parseInt(args[0], 10);
-    } else if (args[0].startsWith("@")) {
-      username = args[0];
-      userId = resolveUserId(username);
-    }
-  }
-  if (args.length > 1) motivo = args.slice(1).join(" ");
-  if (!userId) {
-    return ctx.reply(`⚠️ No se pudo resolver el usuario. Uso correcto: /gunban <id_usuario | @usuario> [motivo]`, { parse_mode: "HTML" });
-  }
-
-  for (const [chatId, grupo] of gruposActivos.entries()) {
-    try {
-      await ctx.telegram.unbanChatMember(String(chatId), userId);
-      await ctx.telegram.sendMessage(
-        String(chatId),
-        `✅ <b>GUNBAN Federación</b>\n🆔 Usuario: <code>${userId}</code>\n🏷️ Grupo: ${grupo.nombre}\n📝 Motivo: ${motivo}`,
-        { parse_mode: "HTML" }
-      );
-    } catch (err) {
-      console.error(`❌ Error al desbanear en grupo ${chatId}:`, err.message);
+      console.error(`❌ Error al procesar en grupo ${chatId}:`, err.message);
     }
   }
 });
