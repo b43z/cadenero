@@ -18,29 +18,31 @@ const FILE_GRUPOS = 'gruposActivos.json';
 
 // Textos de Reglamentos de la Comunidad (Formato corregido y optimizado)
 const REGLAMENTOS = {
-  1: `💬 *REGLAMENTO: SÓLO COTORREO* 💬
+  1: `💬 *COTORREO* 💬
 Este es un grupo para pláticas y desmadre. **NO es un espacio XXX, HOT ni de encuentros.**
 
-⚰️ *NORMAS DE CONVIVENCIA* ⚰️
+⚰️ *NORMAS* ⚰️
 💀 **Preséntate:** Al ingresar interactúa, no seas un "mueble" o serás expulsado.
-💀 **Estrictamente prohibido:** Enviar fotopitos, CP, Gore, Zoo, etc.
-💀 **Sin Spam:** Prohibido ventas, pedir o compartir links/grupos sin autorización de un Admin.
+💀 **Estrictamente prohibido:** Enviar fotopitos al grupo, pedir/vender CP, Gore, Zoo, etc.
+💀 **Sin Spam:** Prohibido ventas, Hackeos, Chantajes, pedir/compartir links/grupos sin autorización de un Admin.
+💀 **Sin Spam:** NvXNv, Cambios,.
 💀 **Creadoras de Contenido:** Si vendes material, pide permiso a un Admin y verifícate antes de promocionarte.
-💀 **Material Temporal:** Se permite compartir material propio temporalmente (se borrará después).
-💀 **Respeta el Privado:** No acoses en PV a los miembros sin antes haber cotorreado en el grupo. No se toleran chantajes ni hackeos.
+💀 **Material Temporal:** Se permite compartir material propio +18 temporalmente (se borrará después).
+💀 **Respeta el Privado:** No acoses en PV a los miembros sin antes haber cotorreado en el grupo.
 💀 **Garantía:** Compras bajo tu propio riesgo; el grupo y los admins no interfieren en ventas.
 💀 **Límites:** No confundas el cotorreo con el bullying.`,
 
-  2: `🔥 *REGLAMENTO: COTORREO HOT* 🔥
+  2: `🔥*COTORREO HOT*🔥
 Espacio para conocer gente, interactuar de forma caliente y promover contenido, sin caer en el morbo pesado.
 
-⚰️ *NORMAS DE CONVIVENCIA* ⚰️
+⚰️ *NORMAS* ⚰️
 💀 **Actividad:** Al ingresar intégrate al desmadre, evita quedarte de "mueble" o serás expulsado.
 💀 **Estrictamente prohibido:** Enviar fotopitos al grupo, pedir/vender CP, Gore, Zoo, etc.
-💀 **Sin Spam:** Prohibido ventas, pedir o compartir links/grupos sin autorización de un Admin.
+💀 **Sin Spam:** Prohibido ventas, Hackeos, Chantajes, pedir/compartir links/grupos sin autorización de un Admin.
+💀 **Sin Spam:** NvXNv, Cambios,.
 💀 **Creadoras de Contenido:** Si vendes material, pide permiso a un Admin y verifícate antes de promocionarte.
 💀 **Material Temporal:** Puedes compartir tu material +18 propio, pero se eliminará pasado un tiempo.
-💀 **No Acoso:** Respeta a los miembros; prohibido hostigar en PV, chantajes, NvXNv o hackeos.
+💀 **Respeta el Privado:** No acoses en PV a los miembros sin antes haber cotorreado en el grupo.
 💀 **Garantía:** Las transacciones económicas son bajo tu propio riesgo; el staff no se hace responsable.`
 };
 
