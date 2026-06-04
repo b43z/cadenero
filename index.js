@@ -105,51 +105,36 @@ function escapeMarkdownV2(text) {
 }
 
 
-// --- BLOQUE 4: Procesamiento de usuarios directos ---
-async function procesarUsuario(ctx, user) {
-  const chatId = String(ctx.chat.id);
-  const grupo = gruposActivos.get(chatId);
-  if (!grupo) return;
-  const claveUsuario = `${chatId}-${user.id}`;
+// --- BLOQUE 4: Validaciones de nombres ---
+function nombreInvalido(nombre) {
+  if (!nombre) return true;
 
-  const ahora = Date.now();
-  if (usuariosProcesados.has(claveUsuario)) {
-    const { timestamp } = usuariosProcesados.get(claveUsuario);
-    if (ahora - timestamp < 24 * 60 * 60 * 1000) return;
-  }
-  usuariosProcesados.set(claveUsuario, { timestamp: ahora });
+  // Solo símbolos o signos
+  const soloSimbolos = /^[\p{P}\p{S}]+$/u;
 
-  if (grupo.pausado) {
-    gruposPendientes.set(user.id, { chatId, user, tipo: "directo" });
-    return autoDelete(ctx, `⏸️ Usuario *${user.first_name}* quedó en espera porque el grupo está pausado.`);
-  }
+  // Una sola letra
+  const unaLetra = /^[A-Za-zÁÉÍÓÚÜÑ]$/u;
 
-  if (nombreInvalido(user.first_name)) {
-    try {
-      await ctx.telegram.banChatMember(chatId, user.id);
-      autoDelete(ctx, `🚫 Usuario rechazado: *${user.first_name}* (ID: ${user.id})`);
-      grupo.usuariosRechazados = (grupo.usuariosRechazados || 0) + 1;
-      guardarGrupos();
-    } catch {}
-    return;
-  }
+  // Letras repetidas (ej: aaa, bbb)
+  const letrasRepetidas = /(.)\1{2,}/u;
 
-  const usernameText = user.username ? `@${user.username}` : "(sin username)";
-  const mensajeBienvenida =
-    `👋 Bienvenido *${user.first_name}* ${usernameText} (ID: ${user.id}) al grupo *${grupo.nombre}*!`;
+  // Letra seguida de símbolo (ej: a!)
+  const letraMasSimbolo = /^[A-Za-zÁÉÍÓÚÜÑ][\p{P}\p{S}]$/u;
 
-  grupo.usuariosProcesados = (grupo.usuariosProcesados || 0) + 1;
-  gruposActivos.set(chatId, grupo);
-  guardarGrupos();
+  // Nombres demasiado cortos
+  if (nombre.length < 2) return true;
 
-  autoDelete(ctx, {
-    text: mensajeBienvenida,
-    options: {
-      parse_mode: "MarkdownV2",
-      reply_markup: { inline_keyboard: [[{ text: "🚨 Banear", callback_data: `ban|${user.id}` }]] }
-    }
-  });
+  // Nombres con espacios raros o vacíos
+  if (/^\s+$/.test(nombre)) return true;
+
+  return (
+    soloSimbolos.test(nombre) ||
+    unaLetra.test(nombre) ||
+    letrasRepetidas.test(nombre) ||
+    letraMasSimbolo.test(nombre)
+  );
 }
+
 // --- BLOQUE 5: Manejo de solicitudes de ingreso ---
 bot.on('chat_join_request', async (ctx) => {
   try {
