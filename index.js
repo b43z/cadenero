@@ -262,14 +262,12 @@ bot.start((ctx) => {
   const grupo = gruposActivos.get(chatId);
   const esGrupo = ctx.chat.type.endsWith("group");
 
-  // Estadísticas del grupo (solo si está en grupo)
   const estadisticasGrupo = esGrupo
     ? `👋 Este bot está activo en el grupo *${grupo?.nombre || "Sin nombre"}*.\n\n` +
       `📊 Usuarios procesados: ${grupo?.usuariosProcesados || 0}\n` +
       `🚫 Usuarios rechazados: ${grupo?.usuariosRechazados || 0}\n\n`
     : "";
 
-  // Menú según contexto
   const menuComandos = esGrupo
     ? `📜 *Menú de comandos del grupo*\n\n` +
       `➡️ /start – Muestra estadísticas del grupo y este menú\n` +
@@ -293,7 +291,32 @@ bot.start((ctx) => {
   });
 });
 
+// --- BLOQUE 9: Comando /grupos ---
+bot.command("grupos", (ctx) => {
+  try {
+    if (gruposActivos.size === 0) {
+      return autoDelete(ctx, "📂 No hay grupos activos registrados.");
+    }
 
+    let mensaje = "📂 *Grupos activos y autorizados*\n\n";
+
+    for (const [chatId, grupo] of gruposActivos.entries()) {
+      const autorizado = gruposAutorizados.has(chatId) ? "✅ Autorizado" : "❌ No autorizado";
+      const estado = grupo.pausado ? "⏸️ Pausado" : "▶️ Activo";
+      const reglamento = grupo.tipoReglamento || "default";
+
+      mensaje += `• ${grupo.nombre || "Sin nombre"} (${chatId})\n   Estado: ${estado}\n   Reglamento: ${reglamento}\n   ${autorizado}\n\n`;
+    }
+
+    return autoDelete(ctx, {
+      text: escapeMarkdownV2(mensaje),
+      options: { parse_mode: "MarkdownV2" }
+    });
+  } catch (err) {
+    console.error("❌ Error en comando /grupos:", err.message);
+    return autoDelete(ctx, "⚠️ Ocurrió un error al listar los grupos.");
+  }
+});
 // --- BLOQUE 9: GBAN y GUNBAN ---
 // Función auxiliar para resolver usernames a IDs
 async function resolveUserId(ctx, chatId, username) {
