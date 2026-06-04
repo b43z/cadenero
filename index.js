@@ -121,7 +121,6 @@ async function esAdminDelGrupo(ctx, userId) {
     return false;
   }
 }
-
 // --- BLOQUE 4: Procesamiento de usuarios directos ---
 async function procesarUsuario(ctx, user) {
   const chatId = String(ctx.chat.id);
