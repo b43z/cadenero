@@ -79,7 +79,7 @@ function autoDelete(ctx, mensaje) {
       } else {
         mensajesActivos.delete(chatId);
       }
-    }, 240000);
+    }, 300000); // 5 minutos
   });
 }
 
@@ -133,7 +133,7 @@ function nombreInvalido(nombre) {
   );
 }
 
-// --- BLOQUE 4bis: Función para obtener reglamento ---
+// --- BLOQUE 5: Función para obtener reglamento ---
 function obtenerReglamento(chatId) {
   const grupo = gruposActivos.get(chatId);
   if (!grupo) return "📖 No hay reglamento configurado para este grupo.";
@@ -148,7 +148,25 @@ function obtenerReglamento(chatId) {
   }
 }
 
-// --- BLOQUE 5: Manejo de solicitudes de ingreso con contador ---
+// --- BLOQUE 6: Wrapper global para autoDelete ---
+const originalReply = Telegraf.Context.prototype.reply;
+Telegraf.Context.prototype.reply = function(...args) {
+  return autoDelete(this, args.length === 1 ? args[0] : { text: args[0], options: args[1] });
+};
+
+const originalSendMessage = bot.telegram.sendMessage.bind(bot.telegram);
+bot.telegram.sendMessage = function(chatId, text, options) {
+  // Excluir mensajes con contador integrado
+  if (text.includes("Tiempo restante")) {
+    return originalSendMessage(chatId, text, options);
+  }
+  // En cualquier otro caso, aplicar autoDelete
+  return autoDelete(
+    { chat: { id: chatId }, telegram: bot.telegram, reply: (t, o) => originalSendMessage(chatId, t, o) },
+    { text, options }
+  );
+};
+// --- BLOQUE 7: Manejo de solicitudes de ingreso con contador ---
 bot.on('chat_join_request', async (ctx) => {
   try {
     const chatId = String(ctx.chat.id);
@@ -174,7 +192,7 @@ bot.on('chat_join_request', async (ctx) => {
       can_add_web_page_previews: false
     });
 
-    // Enviar mensaje con contador inicial
+    // Enviar mensaje con contador inicial (NO se borra automáticamente)
     let tiempoRestante = 5 * 60; // 5 minutos en segundos
     const mensaje = await ctx.telegram.sendMessage(chatId,
       `⚠️ Presiona el botón *Reglas/Rules* para verlas y poder participar.\n⏱️ Tiempo restante: 5:00`,
@@ -237,7 +255,7 @@ bot.on('chat_join_request', async (ctx) => {
   }
 });
 
-// --- BLOQUE 6: Manejo de aceptación/rechazo ---
+// --- BLOQUE 8: Manejo de aceptación/rechazo ---
 bot.on("callback_query", async (ctx) => {
   try {
     const data = ctx.callbackQuery.data;
@@ -258,9 +276,6 @@ bot.on("callback_query", async (ctx) => {
       await ctx.answerCbQuery("✅ Has aceptado el reglamento.", { show_alert: true });
       await ctx.deleteMessage();
 
-      // borrar el mensaje del contador al aceptar
-      await ctx.telegram.deleteMessage(chatId, mensaje.message_id).catch(() => {});
-
     } else if (data.startsWith("rechazo|")) {
       const [ , chatIdStr, userIdStr ] = data.split("|");
       const chatId = Number(chatIdStr);
@@ -273,15 +288,12 @@ bot.on("callback_query", async (ctx) => {
       }
       await ctx.answerCbQuery("❌ Has rechazado el reglamento.", { show_alert: true });
       await ctx.deleteMessage();
-
-      // borrar el mensaje del contador al rechazar
-      await ctx.telegram.deleteMessage(chatId, mensaje.message_id).catch(() => {});
     }
   } catch (err) {
     console.error("❌ Error en callback_query:", err.message);
   }
 });
-// --- BLOQUE 8: Comando /start adaptado ---
+// --- BLOQUE 9: Comando /start adaptado ---
 bot.start((ctx) => {
   const chatId = String(ctx.chat.id);
   const grupo = gruposActivos.get(chatId);
@@ -321,7 +333,8 @@ bot.start((ctx) => {
     options: { parse_mode: "MarkdownV2" }
   });
 });
-// --- BLOQUE 9: GBAN y GUNBAN ---
+
+// --- BLOQUE 10: GBAN y GUNBAN ---
 async function resolveUserId(ctx, chatId, username) {
   try {
     const targetUsername = username.replace("@", "");
@@ -399,7 +412,8 @@ bot.command('gunban', async (ctx) => {
     }
   }
 });
-// --- BLOQUE 9bis: Comando /grupos ---
+
+// --- BLOQUE 11: Comando /grupos ---
 bot.command("grupos", (ctx) => {
   try {
     if (gruposActivos.size === 0) {
@@ -426,7 +440,7 @@ bot.command("grupos", (ctx) => {
   }
 });
 
-// --- BLOQUE 10bis: Comando /setreglamento ---
+// --- BLOQUE 12: Comando /setreglamento ---
 bot.command('setreglamento', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) return ctx.reply("❌ Solo los administradores pueden usar este comando.");
@@ -458,7 +472,7 @@ bot.command('setreglamento', async (ctx) => {
   );
 });
 
-// --- INICIO DEL BOT ---
+// --- BLOQUE 13: Inicio y cierre seguro del bot ---
 bot.launch()
   .then(() => {
     console.log("🤖 Bot iniciado correctamente y escuchando eventos...");
@@ -467,6 +481,6 @@ bot.launch()
     console.error("❌ Error al iniciar el bot:", err.message);
   });
 
-// --- Manejo de cierre seguro ---
+// --- BLOQUE 14: Manejo de cierre seguro ---
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
