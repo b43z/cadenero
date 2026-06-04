@@ -281,18 +281,25 @@ bot.on('callback_query', async (ctx) => {
     const grupoNombre = grupo ? grupo.nombre : "el grupo";
 
     try {
+      // 1. Aprobar primero la solicitud de acceso al grupo (Acción prioritaria)
       await ctx.telegram.approveChatJoinRequest(targetChatId, userId);
       actualizarGrupo(targetChatId, 1, 0);
 
-      // Eliminar el mensaje de reglamento con botones inmediatamente del chat privado del bot
+      // 2. Eliminar el mensaje de reglamento con botones inmediatamente del privado
       await ctx.deleteMessage(messageId).catch(() => {});
 
-      // Enviar mensaje informativo limpio y efímero en el privado
-      const msgConfirmacion = await ctx.reply(`✅ ¡Perfecto! Has aceptado el reglamento. Ya puedes ingresar y participar en *${grupoNombre}*.`);
-      setTimeout(() => {
-        ctx.deleteMessage(msgConfirmacion.message_id).catch(() => {});
-      }, 6000);
+      // 3. Intentar enviar mensaje de éxito efímero en privado de forma aislada
+      try {
+        const msgConfirmacion = await ctx.reply(`✅ ¡Perfecto! Has aceptado el reglamento. Ya puedes ingresar y participar en *${grupoNombre}*.`);
+        setTimeout(() => {
+          ctx.deleteMessage(msgConfirmacion.message_id).catch(() => {});
+        }, 6000);
+      } catch (chatErr) {
+        // Manejo silencioso en caso de error 403 (Evita romper el resto del proceso)
+        console.log(`ℹ️ El usuario ${userId} cerró el chat privado antes de enviar el texto de confirmación.`);
+      }
 
+      // 4. Enviar la bienvenida con su respectivo botón de Ban al grupo de origen
       const username = ctx.from.username ? `@${ctx.from.username}` : "(sin username)";
       
       const pseudoCtx = {
@@ -312,8 +319,8 @@ bot.on('callback_query', async (ctx) => {
       });
 
     } catch (err) {
-      console.error("❌ Error al procesar aprobación vía botón:", err.message);
-      await ctx.answerCbQuery("⚠️ No se pudo procesar tu entrada. Es posible que tu solicitud haya expirado por tiempo.", { show_alert: true });
+      console.error("❌ Error crítico al procesar aprobación vía botón:", err.message);
+      await ctx.answerCbQuery("⚠️ No se pudo procesar tu entrada. Es posible que tu solicitud haya expirado.", { show_alert: true }).catch(() => {});
     }
     return;
   }
@@ -325,7 +332,7 @@ bot.on('callback_query', async (ctx) => {
       await ctx.telegram.declineChatJoinRequest(targetChatId, userId);
       actualizarGrupo(targetChatId, 0, 1);
       
-      // Cambiar el texto a denegado y borrarlo completamente poco después para vaciar el chat del bot
+      // Cambiar texto a denegado y borrarlo a los 5 segundos para mantener limpio el chat privado del bot
       await ctx.editMessageText("❌ Has rechazado el reglamento. Tu solicitud de acceso al grupo fue denegada.");
       setTimeout(() => {
         ctx.deleteMessage(messageId).catch(() => {});
