@@ -198,7 +198,7 @@ bot.use(async (ctx, next) => {
   await next();
 });
 
-// --- BLOQUE 7: Manejo de solicitudes de ingreso con contador ---
+// --- BLOQUE 7: Manejo de solicitudes de ingreso con contador (HTML) ---
 bot.on('chat_join_request', async (ctx) => {
   try {
     const chatId = String(ctx.chat.id);
@@ -213,7 +213,11 @@ bot.on('chat_join_request', async (ctx) => {
         await ctx.telegram.declineChatJoinRequest(chatId, user.id);
         grupo.usuariosRechazados = (grupo.usuariosRechazados || 0) + 1;
         guardarGrupos();
-        return autoDelete(ctx, `🚫 Usuario *${user.first_name}* fue rechazado por nombre inválido.`);
+        return ctx.telegram.sendMessage(
+          chatId,
+          `🚫 Usuario <b>${user.first_name}</b> fue rechazado por nombre inválido.`,
+          { parse_mode: "HTML" }
+        );
       } catch (err) {
         console.error("❌ Error al rechazar solicitud:", err.message);
       }
@@ -227,8 +231,8 @@ bot.on('chat_join_request', async (ctx) => {
       if (err.message.includes("HIDE_REQUESTER_MISSING")) {
         await ctx.telegram.sendMessage(
           chatId,
-          `⚠️ El usuario *${user.first_name}* debe iniciar chat privado con el bot antes de poder ser aprobado.`,
-          { parse_mode: "MarkdownV2" }
+          `⚠️ El usuario <b>${user.first_name}</b> debe iniciar chat privado con el bot antes de poder ser aprobado.`,
+          { parse_mode: "HTML" }
         );
         return;
       } else {
@@ -248,9 +252,9 @@ bot.on('chat_join_request', async (ctx) => {
     // Enviar mensaje con contador inicial (NO se borra automáticamente)
     let tiempoRestante = 5 * 60; // 5 minutos en segundos
     const mensaje = await ctx.telegram.sendMessage(chatId,
-      `⚠️ Presiona el botón *Reglas/Rules* para verlas y poder participar.\n⏱️ Tiempo restante: 5:00`,
+      `⚠️ Presiona el botón <b>Reglas/Rules</b> para verlas y poder participar.\n⏱️ Tiempo restante: 5:00`,
       {
-        parse_mode: "MarkdownV2",
+        parse_mode: "HTML",
         reply_markup: {
           inline_keyboard: [
             [{ text: "📜 Rules", url: `https://t.me/${ctx.botInfo.username}?start=${chatId}_${user.id}` }]
@@ -271,9 +275,9 @@ bot.on('chat_join_request', async (ctx) => {
           chatId,
           mensaje.message_id,
           null,
-          `⚠️ Presiona el botón *Reglas/Rules* para verlas y poder participar.\n⏱️ Tiempo restante: ${formato}`,
+          `⚠️ Presiona el botón <b>Reglas/Rules</b> para verlas y poder participar.\n⏱️ Tiempo restante: ${formato}`,
           {
-            parse_mode: "MarkdownV2",
+            parse_mode: "HTML",
             reply_markup: {
               inline_keyboard: [
                 [{ text: "📜 Rules", url: `https://t.me/${ctx.botInfo.username}?start=${chatId}_${user.id}` }]
@@ -292,8 +296,8 @@ bot.on('chat_join_request', async (ctx) => {
             await ctx.telegram.kickChatMember(chatId, user.id);
             await ctx.telegram.sendMessage(
               chatId,
-              `⏱️ Usuario *${user.first_name}* fue expulsado por no aceptar las reglas a tiempo.`,
-              { parse_mode: "MarkdownV2" }
+              `⏱️ Usuario <b>${user.first_name}</b> fue expulsado por no aceptar las reglas a tiempo.`,
+              { parse_mode: "HTML" }
             );
           } catch (err) {
             console.error("❌ Error al expulsar por timeout:", err.message);
@@ -307,6 +311,7 @@ bot.on('chat_join_request', async (ctx) => {
     console.error("❌ Error en chat_join_request:", err.message);
   }
 });
+
 
 // --- BLOQUE 8: Manejo de aceptación/rechazo ---
 bot.on("callback_query", async (ctx) => {
