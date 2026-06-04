@@ -103,7 +103,16 @@ function escapeMarkdownV2(text) {
     .replace(/\./g, "\\.")
     .replace(/!/g, "\\!");
 }
-
+// --- BLOQUE 3bis: Verificación de administradores ---
+async function esAdminDelGrupo(ctx, userId) {
+  try {
+    const miembro = await ctx.telegram.getChatMember(ctx.chat.id, userId);
+    return ["administrator", "creator"].includes(miembro.status);
+  } catch (err) {
+    console.error("❌ Error al verificar admin:", err.message);
+    return false;
+  }
+}
 
 // --- BLOQUE 4: Validaciones de nombres ---
 function nombreInvalido(nombre) {
@@ -217,11 +226,17 @@ bot.on("callback_query", async (ctx) => {
     if (data.startsWith("acepto|")) {
       const [ , chatId, userIdStr ] = data.split("|");
       const userId = Number(userIdStr);
-      await ctx.telegram.approveChatJoinRequest(chatId, userId);
+      try {
+        await ctx.telegram.approveChatJoinRequest(chatId, userId);
+      } catch (err) {
+        if (!String(err.message).includes("USER_ALREADY_PARTICIPANT")) {
+          console.error("❌ Error al aprobar:", err.message);
+        }
+      }
       await ctx.answerCbQuery("✅ Has aceptado el reglamento.", { show_alert: true });
       await ctx.telegram.sendMessage(
         chatId,
-        `🎉 Usuario *${ctx.from.first_name}* fue aprobado y ya puede ingresar.`,
+        escapeMarkdownV2(`🎉 Usuario *${ctx.from.first_name}* fue aprobado y ya puede ingresar.`),
         { parse_mode: "MarkdownV2" }
       );
     } else if (data.startsWith("rechazo|")) {
@@ -231,7 +246,7 @@ bot.on("callback_query", async (ctx) => {
       await ctx.answerCbQuery("❌ Has rechazado el reglamento.", { show_alert: true });
       await ctx.telegram.sendMessage(
         chatId,
-        `🚫 Usuario (ID: ${userId}) rechazó el reglamento.`,
+        escapeMarkdownV2(`🚫 Usuario (ID: ${userId}) rechazó el reglamento.`),
         { parse_mode: "MarkdownV2" }
       );
     } else if (data.startsWith("ban|")) {
@@ -242,7 +257,7 @@ bot.on("callback_query", async (ctx) => {
         await ctx.answerCbQuery("🚨 Usuario baneado.", { show_alert: true });
         await ctx.telegram.sendMessage(
           ctx.chat.id,
-          `🚨 Usuario (ID: ${userId}) ha sido baneado.`,
+          escapeMarkdownV2(`🚨 Usuario (ID: ${userId}) ha sido baneado.`),
           { parse_mode: "MarkdownV2" }
         );
       } catch (err) {
@@ -255,6 +270,7 @@ bot.on("callback_query", async (ctx) => {
     await ctx.answerCbQuery("⚠️ Hubo un error al procesar tu respuesta.");
   }
 }); // <-- cierre correcto
+
 
 // --- BLOQUE 8: Comando /start adaptado ---
 bot.start((ctx) => {
@@ -348,7 +364,6 @@ bot.on('chat_join_request', async (ctx) => {
     console.error("❌ Error al enviar reglamento:", err.message);
   }
 });
-
 // --- BLOQUE 11: Callback de aceptación/rechazo ---
 bot.on("callback_query", async (ctx) => {
   const data = ctx.callbackQuery.data;
@@ -356,7 +371,13 @@ bot.on("callback_query", async (ctx) => {
 
   try {
     if (accion === "acepto") {
-      await ctx.telegram.approveChatJoinRequest(chatId, Number(userId));
+      try {
+        await ctx.telegram.approveChatJoinRequest(chatId, Number(userId));
+      } catch (err) {
+        if (!String(err.message).includes("USER_ALREADY_PARTICIPANT")) {
+          throw err;
+        }
+      }
       await ctx.deleteMessage(); // borra el mensaje del reglamento
       return ctx.answerCbQuery("✅ Has aceptado el reglamento. Bienvenido al grupo.");
     }
@@ -371,81 +392,59 @@ bot.on("callback_query", async (ctx) => {
   }
 });
 // --- BLOQUE 9: GBAN y GUNBAN ---
-// Función auxiliar para resolver usernames a IDs
-async function resolveUserId(ctx, chatId, username) {
+// --- BLOQUE 6: Manejo de botones de aceptación/rechazo y ban ---
+bot.on("callback_query", async (ctx) => {
   try {
-    const targetUsername = username.replace("@", "").toLowerCase();
-    const miembro = await ctx.telegram.getChatMember(chatId, targetUsername);
-    return miembro?.user?.id || null;
-  } catch {
-    return null;
-  }
-}
-bot.command('gban', async (ctx) => {
-  const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
-  if (!esAdmin) return ctx.reply("❌ Solo los administradores pueden usar este comando.");
+    const data = ctx.callbackQuery.data;
 
-  const args = ctx.message.text.split(" ").slice(1);
-  let userId, motivo = "Sin motivo especificado", username = "";
-
-  if (ctx.message.reply_to_message) {
-    const target = ctx.message.reply_to_message.from;
-    userId = target.id;
-    username = target.username ? `@${target.username}` : "";
-  } else if (args[0]) {
-    if (/^\d+$/.test(args[0])) userId = Number(args[0]);
-    else if (args[0].startsWith("@")) {
-      username = args[0];
-      userId = await resolveUserId(ctx, ctx.chat.id, username);
-    }
-  }
-  if (args.length > 1) motivo = args.slice(1).join(" ");
-  if (!userId) return ctx.reply("⚠️ Uso: `/gban <id_usuario | @usuario> [motivo]`", { parse_mode: "MarkdownV2" });
-
-  for (const [chatId, grupo] of gruposActivos.entries()) {
-    try {
-      await ctx.telegram.banChatMember(chatId, userId);
+    if (data.startsWith("acepto|")) {
+      const [ , chatId, userIdStr ] = data.split("|");
+      const userId = Number(userIdStr);
+      try {
+        await ctx.telegram.approveChatJoinRequest(chatId, userId);
+      } catch (err) {
+        if (!String(err.message).includes("USER_ALREADY_PARTICIPANT")) {
+          console.error("❌ Error al aprobar:", err.message);
+        }
+      }
+      await ctx.answerCbQuery("✅ Has aceptado el reglamento.", { show_alert: true });
       await ctx.telegram.sendMessage(
         chatId,
-        `🚨 *GBAN Federación*\n🆔 Usuario: ${userId} ${username}\n🏷️ Grupo: ${grupo.nombre}\n📝 Motivo: ${motivo}`,
+        escapeMarkdownV2(`🎉 Usuario *${ctx.from.first_name}* fue aprobado y ya puede ingresar.`),
         { parse_mode: "MarkdownV2" }
       );
-    } catch (err) {
-      console.error(`❌ Error al banear en grupo ${chatId}:`, err.message);
-    }
-  }
-});
-
-bot.command('gunban', async (ctx) => {
-  const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
-  if (!esAdmin) return ctx.reply("❌ Solo los administradores pueden usar este comando.");
-
-  const args = ctx.message.text.split(" ").slice(1);
-  let userId, motivo = "Sin motivo especificado", username = "";
-
-  if (args[0]) {
-    if (/^\d+$/.test(args[0])) userId = Number(args[0]);
-    else if (args[0].startsWith("@")) {
-      username = args[0];
-      userId = await resolveUserId(ctx, ctx.chat.id, username);
-    }
-  }
-  if (args.length > 1) motivo = args.slice(1).join(" ");
-  if (!userId) return ctx.reply("⚠️ Uso: `/gunban <id_usuario | @usuario> [motivo]`", { parse_mode: "MarkdownV2" });
-
-  for (const [chatId, grupo] of gruposActivos.entries()) {
-    try {
-      await ctx.telegram.unbanChatMember(chatId, userId);
+    } else if (data.startsWith("rechazo|")) {
+      const [ , chatId, userIdStr ] = data.split("|");
+      const userId = Number(userIdStr);
+      await ctx.telegram.declineChatJoinRequest(chatId, userId);
+      await ctx.answerCbQuery("❌ Has rechazado el reglamento.", { show_alert: true });
       await ctx.telegram.sendMessage(
         chatId,
-        `✅ *GUNBAN Federación*\n🆔 Usuario: ${userId}\n🏷️ Grupo: ${grupo.nombre}\n📝 Motivo: ${motivo}`,
+        escapeMarkdownV2(`🚫 Usuario (ID: ${userId}) rechazó el reglamento.`),
         { parse_mode: "MarkdownV2" }
       );
-    } catch (err) {
-      console.error(`❌ Error al desbanear en grupo ${chatId}:`, err.message);
+    } else if (data.startsWith("ban|")) {
+      const [ , userIdStr ] = data.split("|");
+      const userId = Number(userIdStr);
+      try {
+        await ctx.telegram.banChatMember(ctx.chat.id, userId);
+        await ctx.answerCbQuery("🚨 Usuario baneado.", { show_alert: true });
+        await ctx.telegram.sendMessage(
+          ctx.chat.id,
+          escapeMarkdownV2(`🚨 Usuario (ID: ${userId}) ha sido baneado.`),
+          { parse_mode: "MarkdownV2" }
+        );
+      } catch (err) {
+        console.error("❌ Error al banear:", err.message);
+        await ctx.answerCbQuery("❌ Error al banear.", { show_alert: true });
+      }
     }
+  } catch (err) {
+    console.error("❌ Error al procesar callback_query:", err.message);
+    await ctx.answerCbQuery("⚠️ Hubo un error al procesar tu respuesta.");
   }
-});
+}); // <-- cierre correcto
+
 // --- BLOQUE 10: Comando /setreglamento ---
 bot.command('setreglamento', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
