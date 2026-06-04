@@ -123,7 +123,7 @@ function autoDelete(ctx, mensaje) {
       ctx.deleteMessage(sent.message_id).catch(() => {});
       const idx = lista.indexOf(sent.message_id);
       if (idx !== -1) lista.splice(idx, 1);
-    }, 240000);
+    }, 240000); // Autodestrucción en 4 minutos
     
   }).catch(err => console.error("❌ Error en autoDelete al enviar:", err.message));
 }
@@ -261,6 +261,34 @@ bot.start((ctx) => {
   );
 });
 
+// 📖 NUEVO COMANDO: Manual de Ayuda y Sintaxis
+bot.help((ctx) => {
+  const manualAyuda = 
+    `📖 *Manual de Comandos — Federación Cancerberos*\n\n` +
+    `🤖 *1. /start*\n` +
+    `• *Descripción:* Inicializa el bot en privado o expone las métricas de control en un grupo.\n` +
+    `• *Sintaxis:* \`/start\`\n` +
+    `• *Quién:* Todo público (Privado) / Administradores (Grupos).\n` +
+    `• *Dónde:* Chat Privado y Grupos.\n\n` +
+    
+    `🛡️ *2. /gban*\n` +
+    `• *Descripción:* Ejecuta un baneo preventivo global, expulsando al infractor de todas las comunidades controladas de forma simultánea.\n` +
+    `• *Sintaxis por ID:* \`/gban <id_numérico> [motivo]\`\n` +
+    `• *Sintaxis por Respuesta:* Responder al mensaje de la cuenta con \`/gban [motivo]\`\n` +
+    `• *Quién:* Exclusivo para *Administradores* del grupo.\n` +
+    `• *Dónde:* Únicamente dentro de los *Grupos* activos.\n\n` +
+    
+    `❓ *3. /help*\n` +
+    `• *Descripción:* Despliega este manual técnico explicativo con los parámetros operativos.\n` +
+    `• *Sintaxis:* \`/help\`\n` +
+    `• *Quién:* Cualquier usuario.\n` +
+    `• *Dónde:* Chat Privado y Grupos.\n\n` +
+    
+    `⚙️ _Nota: Las tareas de filtrado por patrón de caracteres y depuración en lote se realizan de manera 100% automatizada en segundo plano al recibir solicitudes de ingreso._`;
+
+  return ctx.reply(manualAyuda, { parse_mode: "Markdown" });
+});
+
 async function esAdminDelGrupo(ctx, userId) {
   try {
     const admins = await ctx.getChatAdministrators();
@@ -321,7 +349,7 @@ bot.command('gban', async (ctx) => {
       if (sent) {
         setTimeout(() => {
           ctx.telegram.deleteMessage(chatId, sent.message_id).catch(() => {});
-        }, 240000); 
+        }, 240000); // Borrado en 4 minutos
       }
     } catch (err) {
       console.error(`❌ Error gban preventivo en grupo ${chatId} (ID: ${userId}):`, err.message);
