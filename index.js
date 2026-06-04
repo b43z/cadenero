@@ -16,6 +16,7 @@ const mensajesActivos = new Map();
 const warns = new Map();
 const estadisticasUsuarios = new Map();
 const FILE_GRUPOS = 'gruposActivos.json';
+
 // --- BLOQUE 2: Guardar y cargar grupos ---
 async function guardarGrupos() {
   try {
@@ -49,6 +50,7 @@ function cargarGrupos() {
   }
 }
 cargarGrupos();
+
 // --- BLOQUE 3: Funciones utilitarias ---
 function autoDelete(ctx, mensaje) {
   const chatId = String(ctx.chat.id);
@@ -103,6 +105,7 @@ function escapeMarkdownV2(text) {
     .replace(/\./g, "\\.")
     .replace(/!/g, "\\!");
 }
+
 // --- BLOQUE 3bis: Verificación de administradores ---
 async function esAdminDelGrupo(ctx, userId) {
   try {
@@ -113,29 +116,15 @@ async function esAdminDelGrupo(ctx, userId) {
     return false;
   }
 }
-
 // --- BLOQUE 4: Validaciones de nombres ---
 function nombreInvalido(nombre) {
   if (!nombre) return true;
-
-  // Solo símbolos o signos
   const soloSimbolos = /^[\p{P}\p{S}]+$/u;
-
-  // Una sola letra
   const unaLetra = /^[A-Za-zÁÉÍÓÚÜÑ]$/u;
-
-  // Letras repetidas (ej: aaa, bbb)
   const letrasRepetidas = /(.)\1{2,}/u;
-
-  // Letra seguida de símbolo (ej: a!)
   const letraMasSimbolo = /^[A-Za-zÁÉÍÓÚÜÑ][\p{P}\p{S}]$/u;
-
-  // Nombres demasiado cortos
   if (nombre.length < 2) return true;
-
-  // Nombres con espacios raros o vacíos
   if (/^\s+$/.test(nombre)) return true;
-
   return (
     soloSimbolos.test(nombre) ||
     unaLetra.test(nombre) ||
@@ -143,17 +132,14 @@ function nombreInvalido(nombre) {
     letraMasSimbolo.test(nombre)
   );
 }
-// --- BLOQUE 4bis: Función para obtener reglamento ---
 
+// --- BLOQUE 4bis: Función para obtener reglamento ---
 function obtenerReglamento(chatId) {
   const grupo = gruposActivos.get(chatId);
   if (!grupo) return "📖 No hay reglamento configurado para este grupo.";
-
   try {
     const data = fs.readFileSync("reglamentos.json", "utf8");
     const reglamentos = JSON.parse(data);
-
-    // tipoReglamento puede ser "platica", "contenido", etc.
     const tipo = grupo.tipoReglamento || "default";
     return reglamentos[tipo] || reglamentos["default"];
   } catch (err) {
@@ -168,16 +154,13 @@ bot.on('chat_join_request', async (ctx) => {
     const chatId = String(ctx.chat.id);
     const grupo = gruposActivos.get(chatId);
     if (!grupo || !gruposAutorizados.has(chatId)) return;
-
     const user = ctx.chatJoinRequest.from;
 
-    // Si el grupo está pausado
     if (grupo.pausado) {
       gruposPendientes.set(user.id, { chatId, user, tipo: "solicitud" });
       return autoDelete(ctx, `⏸️ Usuario *${user.first_name}* quedó en espera porque el grupo está pausado.`);
     }
 
-    // Validación de nombre inválido
     if (nombreInvalido(user.first_name)) {
       await ctx.telegram.declineChatJoinRequest(chatId, user.id);
       grupo.usuariosRechazados = (grupo.usuariosRechazados || 0) + 1;
@@ -185,7 +168,6 @@ bot.on('chat_join_request', async (ctx) => {
       return autoDelete(ctx, `🚫 Usuario *${user.first_name}* fue rechazado por nombre inválido.`);
     }
 
-    // Intentar enviar reglamento en privado
     const mensajeReglamento = escapeMarkdownV2(obtenerReglamento(chatId)) +
       "\n\n¿Aceptas el reglamento para ingresar?";
 
@@ -202,22 +184,14 @@ bot.on('chat_join_request', async (ctx) => {
     console.error("❌ Error al procesar chat_join_request:", err.message);
     const chatId = String(ctx.chat.id);
     const user = ctx.chatJoinRequest.from;
-
-    // Aviso breve en el grupo (no se manda reglamento completo aquí)
     await ctx.telegram.sendMessage(
       chatId,
-      `⚠️ Usuario *${user.first_name}* debe abrir chat con el bot (enviar /start en privado) para leer y aceptar el reglamento. 
-      Hasta entonces, su solicitud quedará en espera.`,
+      `⚠️ Usuario *${user.first_name}* debe abrir chat con el bot (enviar /start en privado) para leer y aceptar el reglamento. Hasta entonces, su solicitud quedará en espera.`,
       { parse_mode: "MarkdownV2" }
     );
-
-    // Guardar en lista de espera
     gruposPendientes.set(user.id, { chatId, user, tipo: "pendiente" });
   }
-}); // <-- cierre correcto del bloque
-
-
-
+});
 // --- BLOQUE 6: Manejo de botones de aceptación/rechazo y ban ---
 bot.on("callback_query", async (ctx) => {
   try {
@@ -269,16 +243,13 @@ bot.on("callback_query", async (ctx) => {
     console.error("❌ Error al procesar callback_query:", err.message);
     await ctx.answerCbQuery("⚠️ Hubo un error al procesar tu respuesta.");
   }
-}); // <-- cierre correcto
-
-
+});
 // --- BLOQUE 8: Comando /start adaptado ---
 bot.start((ctx) => {
   const chatId = String(ctx.chat.id);
   const grupo = gruposActivos.get(chatId);
   const esGrupo = ctx.chat.type.endsWith("group");
 
-  // Si es grupo → estadísticas + menú
   if (esGrupo) {
     const estadisticasGrupo =
       `👋 Este bot está activo en el grupo *${grupo?.nombre || "Sin nombre"}*.\n\n` +
@@ -300,7 +271,6 @@ bot.start((ctx) => {
     });
   }
 
-  // Si es privado → solo menú
   const menuPrivado =
     `👋 Hola, soy el portero del grupo.\n\n` +
     `📜 *Comandos disponibles en privado*\n\n` +
@@ -314,8 +284,85 @@ bot.start((ctx) => {
     options: { parse_mode: "MarkdownV2" }
   });
 });
+// --- BLOQUE 9: GBAN y GUNBAN ---
+async function resolveUserId(ctx, chatId, username) {
+  try {
+    const targetUsername = username.replace("@", "");
+    const miembros = await ctx.telegram.getChatAdministrators(chatId);
+    const miembro = miembros.find(m => m.user.username?.toLowerCase() === targetUsername.toLowerCase());
+    return miembro?.user?.id || null;
+  } catch (err) {
+    console.error("❌ Error al resolver username:", err.message);
+    return null;
+  }
+}
 
-// --- BLOQUE 9: Comando /grupos ---
+bot.command('gban', async (ctx) => {
+  const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
+  if (!esAdmin) return ctx.reply("❌ Solo los administradores pueden usar este comando.");
+
+  const args = ctx.message.text.split(" ").slice(1);
+  let userId, motivo = "Sin motivo especificado", username = "";
+
+  if (ctx.message.reply_to_message) {
+    const target = ctx.message.reply_to_message.from;
+    userId = target.id;
+    username = target.username ? `@${target.username}` : "";
+  } else if (args[0]) {
+    if (/^\d+$/.test(args[0])) userId = Number(args[0]);
+    else if (args[0].startsWith("@")) {
+      username = args[0];
+      userId = await resolveUserId(ctx, ctx.chat.id, username);
+    }
+  }
+  if (args.length > 1) motivo = args.slice(1).join(" ");
+  if (!userId) return ctx.reply("⚠️ Uso: `/gban <id_usuario | @usuario> [motivo]`", { parse_mode: "MarkdownV2" });
+
+  for (const [chatId, grupo] of gruposActivos.entries()) {
+    try {
+      await ctx.telegram.banChatMember(chatId, userId);
+      await ctx.telegram.sendMessage(
+        chatId,
+        escapeMarkdownV2(`🚨 *GBAN Federación*\n🆔 Usuario: ${userId} ${username}\n🏷️ Grupo: ${grupo.nombre}\n📝 Motivo: ${motivo}`),
+        { parse_mode: "MarkdownV2" }
+      );
+    } catch (err) {
+      console.error(`❌ Error al banear en grupo ${chatId}:`, err.message);
+    }
+  }
+});
+
+bot.command('gunban', async (ctx) => {
+  const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
+  if (!esAdmin) return ctx.reply("❌ Solo los administradores pueden usar este comando.");
+
+  const args = ctx.message.text.split(" ").slice(1);
+  let userId, motivo = "Sin motivo especificado", username = "";
+
+  if (args[0]) {
+    if (/^\d+$/.test(args[0])) userId = Number(args[0]);
+    else if (args[0].startsWith("@")) {
+      username = args[0];
+      userId = await resolveUserId(ctx, ctx.chat.id, username);
+    }
+  }
+  if (args.length > 1) motivo = args.slice(1).join(" ");
+  if (!userId) return ctx.reply("⚠️ Uso: `/gunban <id_usuario | @usuario> [motivo]`", { parse_mode: "MarkdownV2" });
+
+  for (const [chatId, grupo] of gruposActivos.entries()) {
+    try {
+      await ctx.telegram.unbanChatMember(chatId, userId);
+      await ctx.telegram.sendMessage(
+        chatId,
+        escapeMarkdownV2(`✅ *GUNBAN Federación*\n🆔 Usuario: ${userId}\n🏷️ Grupo: ${grupo.nombre}\n📝 Motivo: ${motivo}`),
+        { parse_mode: "MarkdownV2" }
+      );
+    } catch (err) {
+      console.error(`❌ Error al desbanear en grupo ${chatId}:`, err.message);
+    }
+  }
+});
+// --- BLOQUE 9bis: Comando /grupos ---
 bot.command("grupos", (ctx) => {
   try {
     if (gruposActivos.size === 0) {
@@ -364,88 +411,8 @@ bot.on('chat_join_request', async (ctx) => {
     console.error("❌ Error al enviar reglamento:", err.message);
   }
 });
-// --- BLOQUE 11: Callback de aceptación/rechazo ---
-bot.on("callback_query", async (ctx) => {
-  const data = ctx.callbackQuery.data;
-  const [accion, chatId, userId] = data.split("|");
 
-  try {
-    if (accion === "acepto") {
-      try {
-        await ctx.telegram.approveChatJoinRequest(chatId, Number(userId));
-      } catch (err) {
-        if (!String(err.message).includes("USER_ALREADY_PARTICIPANT")) {
-          throw err;
-        }
-      }
-      await ctx.deleteMessage(); // borra el mensaje del reglamento
-      return ctx.answerCbQuery("✅ Has aceptado el reglamento. Bienvenido al grupo.");
-    }
-
-    if (accion === "rechazo") {
-      await ctx.telegram.declineChatJoinRequest(chatId, Number(userId));
-      await ctx.deleteMessage(); // borra el mensaje del reglamento
-      return ctx.answerCbQuery("❌ Has rechazado el reglamento. No podrás ingresar.");
-    }
-  } catch (err) {
-    console.error("❌ Error en callback:", err.message);
-  }
-});
-// --- BLOQUE 9: GBAN y GUNBAN ---
-// --- BLOQUE 6: Manejo de botones de aceptación/rechazo y ban ---
-bot.on("callback_query", async (ctx) => {
-  try {
-    const data = ctx.callbackQuery.data;
-
-    if (data.startsWith("acepto|")) {
-      const [ , chatId, userIdStr ] = data.split("|");
-      const userId = Number(userIdStr);
-      try {
-        await ctx.telegram.approveChatJoinRequest(chatId, userId);
-      } catch (err) {
-        if (!String(err.message).includes("USER_ALREADY_PARTICIPANT")) {
-          console.error("❌ Error al aprobar:", err.message);
-        }
-      }
-      await ctx.answerCbQuery("✅ Has aceptado el reglamento.", { show_alert: true });
-      await ctx.telegram.sendMessage(
-        chatId,
-        escapeMarkdownV2(`🎉 Usuario *${ctx.from.first_name}* fue aprobado y ya puede ingresar.`),
-        { parse_mode: "MarkdownV2" }
-      );
-    } else if (data.startsWith("rechazo|")) {
-      const [ , chatId, userIdStr ] = data.split("|");
-      const userId = Number(userIdStr);
-      await ctx.telegram.declineChatJoinRequest(chatId, userId);
-      await ctx.answerCbQuery("❌ Has rechazado el reglamento.", { show_alert: true });
-      await ctx.telegram.sendMessage(
-        chatId,
-        escapeMarkdownV2(`🚫 Usuario (ID: ${userId}) rechazó el reglamento.`),
-        { parse_mode: "MarkdownV2" }
-      );
-    } else if (data.startsWith("ban|")) {
-      const [ , userIdStr ] = data.split("|");
-      const userId = Number(userIdStr);
-      try {
-        await ctx.telegram.banChatMember(ctx.chat.id, userId);
-        await ctx.answerCbQuery("🚨 Usuario baneado.", { show_alert: true });
-        await ctx.telegram.sendMessage(
-          ctx.chat.id,
-          escapeMarkdownV2(`🚨 Usuario (ID: ${userId}) ha sido baneado.`),
-          { parse_mode: "MarkdownV2" }
-        );
-      } catch (err) {
-        console.error("❌ Error al banear:", err.message);
-        await ctx.answerCbQuery("❌ Error al banear.", { show_alert: true });
-      }
-    }
-  } catch (err) {
-    console.error("❌ Error al procesar callback_query:", err.message);
-    await ctx.answerCbQuery("⚠️ Hubo un error al procesar tu respuesta.");
-  }
-}); // <-- cierre correcto
-
-// --- BLOQUE 10: Comando /setreglamento ---
+// --- BLOQUE 10bis: Comando /setreglamento ---
 bot.command('setreglamento', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) return ctx.reply("❌ Solo los administradores pueden usar este comando.");
@@ -471,8 +438,12 @@ bot.command('setreglamento', async (ctx) => {
   gruposActivos.set(chatId, grupo);
   await guardarGrupos();
 
-  return ctx.reply(`✅ El reglamento del grupo ahora está configurado como: *${tipo}*`, { parse_mode: "MarkdownV2" });
+  return ctx.reply(
+    escapeMarkdownV2(`✅ El reglamento del grupo ahora está configurado como: *${tipo}*`),
+    { parse_mode: "MarkdownV2" }
+  );
 });
+
 // --- INICIO DEL BOT ---
 bot.launch()
   .then(() => {
