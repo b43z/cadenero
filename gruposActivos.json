@@ -2,29 +2,37 @@
   "-1003816149453": {
     "id": "-1003816149453",
     "nombre": "Borrachos y desmadrosos en Jalisco y alrededores",
-    "usuariosProcesados": 0,
-    "usuariosRechazados": 0,
-    "fechaInicio": "2026-05-29T04:00:00.000Z"
+    "pausado": false,
+    "usuariosProcesados": 12,
+    "usuariosRechazados": 3,
+    "tipoReglamento": "platica",
+    "fechaInicio": "2026-05-29T05:23:00.000Z"
   },
   "-1003874157545": {
     "id": "-1003874157545",
     "nombre": "La Cantina GDL",
-    "usuariosProcesados": 0,
-    "usuariosRechazados": 0,
-    "fechaInicio": "2026-05-29T04:00:00.000Z"
+    "pausado": false,
+    "usuariosProcesados": 8,
+    "usuariosRechazados": 1,
+    "tipoReglamento": "platica",
+    "fechaInicio": "2026-05-29T05:23:00.000Z"
   },
   "-1003907798256": {
     "id": "-1003907798256",
     "nombre": "Caricias Tapatias",
-    "usuariosProcesados": 0,
-    "usuariosRechazados": 0,
-    "fechaInicio": "2026-05-29T04:00:00.000Z"
+    "pausado": false,
+    "usuariosProcesados": 5,
+    "usuariosRechazados": 2,
+    "tipoReglamento": "contenido",
+    "fechaInicio": "2026-05-29T05:23:00.000Z"
   },
   "-1003982874038": {
     "id": "-1003982874038",
     "nombre": "Prueba",
+    "pausado": false,
     "usuariosProcesados": 0,
     "usuariosRechazados": 0,
+    "tipoReglamento": "contenido",
     "fechaInicio": "2026-06-02T00:00:00.000Z"
   }
 }
