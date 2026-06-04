@@ -154,13 +154,16 @@ bot.on('chat_join_request', async (ctx) => {
     const chatId = String(ctx.chat.id);
     const grupo = gruposActivos.get(chatId);
     if (!grupo || !gruposAutorizados.has(chatId)) return;
+
     const user = ctx.chatJoinRequest.from;
 
+    // Si el grupo está pausado
     if (grupo.pausado) {
       gruposPendientes.set(user.id, { chatId, user, tipo: "solicitud" });
       return autoDelete(ctx, `⏸️ Usuario *${user.first_name}* quedó en espera porque el grupo está pausado.`);
     }
 
+    // Validación de nombre inválido
     if (nombreInvalido(user.first_name)) {
       await ctx.telegram.declineChatJoinRequest(chatId, user.id);
       grupo.usuariosRechazados = (grupo.usuariosRechazados || 0) + 1;
@@ -168,6 +171,7 @@ bot.on('chat_join_request', async (ctx) => {
       return autoDelete(ctx, `🚫 Usuario *${user.first_name}* fue rechazado por nombre inválido.`);
     }
 
+    // Intentar enviar reglamento en privado
     const mensajeReglamento = escapeMarkdownV2(obtenerReglamento(chatId)) +
       "\n\n¿Aceptas el reglamento para ingresar?";
 
@@ -184,56 +188,63 @@ bot.on('chat_join_request', async (ctx) => {
     console.error("❌ Error al procesar chat_join_request:", err.message);
     const chatId = String(ctx.chat.id);
     const user = ctx.chatJoinRequest.from;
+
+    // Aviso breve en el grupo
     await ctx.telegram.sendMessage(
       chatId,
-      `⚠️ Usuario *${user.first_name}* debe abrir chat con el bot (enviar /start en privado) para leer y aceptar el reglamento. Hasta entonces, su solicitud quedará en espera.`,
+      `⚠️ Usuario *${user.first_name}* debe abrir chat con el bot (enviar /start en privado) para leer y aceptar el reglamento. 
+      Hasta entonces, su solicitud quedará en espera.`,
       { parse_mode: "MarkdownV2" }
     );
+
+    // Guardar en lista de espera
     gruposPendientes.set(user.id, { chatId, user, tipo: "pendiente" });
   }
 });
+
 // --- BLOQUE 6: Manejo de botones de aceptación/rechazo y ban ---
 bot.on("callback_query", async (ctx) => {
   try {
     const data = ctx.callbackQuery.data;
 
     if (data.startsWith("acepto|")) {
-      const [ , chatId, userIdStr ] = data.split("|");
+      const [ , chatIdStr, userIdStr ] = data.split("|");
+      const chatId = Number(chatIdStr);
       const userId = Number(userIdStr);
+
       try {
         await ctx.telegram.approveChatJoinRequest(chatId, userId);
+        await ctx.answerCbQuery("✅ Has aceptado el reglamento.", { show_alert: true });
+        autoDelete(ctx, {
+          text: escapeMarkdownV2(`🎉 Usuario *${ctx.from.first_name}* fue aprobado.`),
+          options: { parse_mode: "MarkdownV2" }
+        });
       } catch (err) {
-        if (!String(err.message).includes("USER_ALREADY_PARTICIPANT")) {
-          console.error("❌ Error al aprobar:", err.message);
-        }
+        console.error("❌ Error al aprobar:", err.message);
+        await ctx.answerCbQuery("⚠️ No se pudo aprobar la solicitud.");
       }
-      await ctx.answerCbQuery("✅ Has aceptado el reglamento.", { show_alert: true });
-      await ctx.telegram.sendMessage(
-        chatId,
-        escapeMarkdownV2(`🎉 Usuario *${ctx.from.first_name}* fue aprobado y ya puede ingresar.`),
-        { parse_mode: "MarkdownV2" }
-      );
     } else if (data.startsWith("rechazo|")) {
-      const [ , chatId, userIdStr ] = data.split("|");
+      const [ , chatIdStr, userIdStr ] = data.split("|");
+      const chatId = Number(chatIdStr);
       const userId = Number(userIdStr);
+
       await ctx.telegram.declineChatJoinRequest(chatId, userId);
       await ctx.answerCbQuery("❌ Has rechazado el reglamento.", { show_alert: true });
-      await ctx.telegram.sendMessage(
-        chatId,
-        escapeMarkdownV2(`🚫 Usuario (ID: ${userId}) rechazó el reglamento.`),
-        { parse_mode: "MarkdownV2" }
-      );
+      autoDelete(ctx, {
+        text: escapeMarkdownV2(`🚫 Usuario (ID: ${userId}) rechazó el reglamento.`),
+        options: { parse_mode: "MarkdownV2" }
+      });
     } else if (data.startsWith("ban|")) {
       const [ , userIdStr ] = data.split("|");
       const userId = Number(userIdStr);
+
       try {
         await ctx.telegram.banChatMember(ctx.chat.id, userId);
         await ctx.answerCbQuery("🚨 Usuario baneado.", { show_alert: true });
-        await ctx.telegram.sendMessage(
-          ctx.chat.id,
-          escapeMarkdownV2(`🚨 Usuario (ID: ${userId}) ha sido baneado.`),
-          { parse_mode: "MarkdownV2" }
-        );
+        autoDelete(ctx, {
+          text: escapeMarkdownV2(`🚨 Usuario (ID: ${userId}) ha sido baneado.`),
+          options: { parse_mode: "MarkdownV2" }
+        });
       } catch (err) {
         console.error("❌ Error al banear:", err.message);
         await ctx.answerCbQuery("❌ Error al banear.", { show_alert: true });
@@ -244,6 +255,7 @@ bot.on("callback_query", async (ctx) => {
     await ctx.answerCbQuery("⚠️ Hubo un error al procesar tu respuesta.");
   }
 });
+
 // --- BLOQUE 8: Comando /start adaptado ---
 bot.start((ctx) => {
   const chatId = String(ctx.chat.id);
