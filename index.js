@@ -21,29 +21,27 @@ const REGLAMENTOS = {
   1: `💬 *COTORREO* 💬
 Este es un grupo para pláticas y desmadre. **NO es un espacio XXX, HOT ni de encuentros.**
 
-⚰️ *NORMAS* ⚰️
-💀 **Preséntate:** Al ingresar interactúa, no seas un "mueble" o serás expulsado.
-💀 **Estrictamente prohibido:** Enviar fotopitos al grupo, pedir/vender CP, Gore, Zoo, etc.
-💀 **Sin Spam:** Prohibido ventas, Hackeos, Chantajes, pedir/compartir links/grupos sin autorización de un Admin.
-💀 **Sin Spam:** NvXNv, Cambios,.
-💀 **Creadoras de Contenido:** Si vendes material, pide permiso a un Admin y verifícate antes de promocionarte.
-💀 **Material Temporal:** Se permite compartir material propio +18 temporalmente (se borrará después).
-💀 **Respeta el Privado:** No acoses en PV a los miembros sin antes haber cotorreado en el grupo.
-💀 **Garantía:** Compras bajo tu propio riesgo; el grupo y los admins no interfieren en ventas.
+⚰️ *Reglamento* ⚰️
+💀 **Preséntate:** interactúa, no seas un "mueble" o serás expulsado.
+💀 **Estrictamente prohibido:** Enviar fotopitos al grupo, CP, Gore, Zoo, etc.
+💀 **Sin Spam:** No Ventas, Hackeos, Chantajes, links/grupos, NvXNv, Cambios, etc.
+💀 **Creadoras de Contenido:** Pide permiso a un Admin y verifícate.
+💀 **Material Temporal:** Solo Material propio +18 (se Elimina Auto).
+💀 **Respeta el Privado:** No acoso PV (DM) / Agg cotorrea en el grupo.
+💀 **Garantía:** La compra de conte es bajo tu riesgo; el staff no se hace responsable.
 💀 **Límites:** No confundas el cotorreo con el bullying.`,
 
   2: `🔥*COTORREO HOT*🔥
-Espacio para conocer gente, interactuar de forma caliente y promover contenido, sin caer en el morbo pesado.
+Espacio para conocer Gente HOT, interactuar de forma caliente y promover contenido, sin caer en el morbo pesado.
 
-⚰️ *NORMAS* ⚰️
-💀 **Actividad:** Al ingresar intégrate al desmadre, evita quedarte de "mueble" o serás expulsado.
-💀 **Estrictamente prohibido:** Enviar fotopitos al grupo, pedir/vender CP, Gore, Zoo, etc.
-💀 **Sin Spam:** Prohibido ventas, Hackeos, Chantajes, pedir/compartir links/grupos sin autorización de un Admin.
-💀 **Sin Spam:** NvXNv, Cambios,.
-💀 **Creadoras de Contenido:** Si vendes material, pide permiso a un Admin y verifícate antes de promocionarte.
-💀 **Material Temporal:** Puedes compartir tu material +18 propio, pero se eliminará pasado un tiempo.
-💀 **Respeta el Privado:** No acoses en PV a los miembros sin antes haber cotorreado en el grupo.
-💀 **Garantía:** Las transacciones económicas son bajo tu propio riesgo; el staff no se hace responsable.`
+⚰️ *Reglamento* ⚰️
+💀 **Actividad:** Intégrate al desmadre, evita quedarte de "mueble".
+💀 **Estrictamente prohibido:** Fotopitos, CP, Gore, Zoo, Material Ilegal, etc.
+💀 **Sin Spam:** No Ventas, Hackeos, Chantajes, links/grupos, NvXNv, Cambios, etc.
+💀 **Creadoras de Contenido:** Pide permiso y verifícate.
+💀 **Material Temporal:** Solo Material +18 Propio, no dormidas, filtrados, exs, (se Elimina Auto).
+💀 **Respeta el Privado:** No acoso PV (DM) / Agg cotorrea en el grupo.
+💀 **Garantía:** La compra de conte es bajo tu riesgo; el staff no se hace responsable.`
 };
 
 function guardarGrupos() {
@@ -170,7 +168,7 @@ async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
     try {
       await ctx.telegram.declineChatJoinRequest(chatId, user.id);
       actualizarGrupo(chatId, 0, 1);
-      autoDelete(ctx, `🚫 Usuario *${user.first_name}* ${username} (ID: ${user.id}) fue rechazado automáticamente por nombre inválido o alfabeto no permitido.`);
+      autoDelete(ctx, `🚫 Usuario *${user.first_name}* ${username} (ID: [${user.id}](tg://user?id=${user.id})) rechazado: nombre inválido o alfabeto no permitido.`);
     } catch (err) {
       console.error("❌ Error al rechazar solicitud automática:", err.message);
     }
@@ -295,11 +293,10 @@ bot.on('callback_query', async (ctx) => {
           ctx.deleteMessage(msgConfirmacion.message_id).catch(() => {});
         }, 6000);
       } catch (chatErr) {
-        // Manejo silencioso en caso de error 403 (Evita romper el resto del proceso)
         console.log(`ℹ️ El usuario ${userId} cerró el chat privado antes de enviar el texto de confirmación.`);
       }
 
-      // 4. Enviar la bienvenida con su respectivo botón de Ban al grupo de origen
+      // 4. Enviar la bienvenida con su respectivo botón de Ban al grupo de origen (ID Activo e interactivo)
       const username = ctx.from.username ? `@${ctx.from.username}` : "(sin username)";
       
       const pseudoCtx = {
@@ -309,7 +306,7 @@ bot.on('callback_query', async (ctx) => {
       };
 
       autoDelete(pseudoCtx, {
-        text: `👋 Bienvenido *${ctx.from.first_name}* ${username} (ID: \`${userId}\`) al grupo *${grupoNombre}*!`,
+        text: `👋 ¡Bienvenido *${ctx.from.first_name}* ${username} (ID: [${userId}](tg://user?id=${userId})) al grupo *${grupoNombre}*!`,
         options: {
           parse_mode: "Markdown",
           reply_markup: {
@@ -406,7 +403,7 @@ bot.command('reglas', async (ctx) => {
   }
 
   const grupo = gruposActivos.get(chatId);
-  const numReglamento = grupo.reglamento || 1; 
+  const numReglamento = group.reglamento || 1; 
   const textoReglamento = REGLAMENTOS[numReglamento];
 
   autoDelete(ctx, {
@@ -452,7 +449,7 @@ async function esAdminDelGrupo(ctx, userId) {
   }
 }
 
-// 🛡️ SECCIÓN GBAN ULTRA-COMPACTA (Soporte nativo para strings e IDs Int64)
+// 🛡️ SECCIÓN GBAN ULTRA-COMPACTA (Soporte nativo para strings e IDs Int64 con enlaces interactivos)
 bot.command('gban', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) return ctx.reply("❌ Solo los administradores pueden usar este comando.");
@@ -496,8 +493,8 @@ bot.command('gban', async (ctx) => {
     try {
       const sent = await ctx.telegram.sendMessage(
         chatId,
-        `🛡️ *Gban de Federación Cancerberos*\n\n` +
-        `🆔 *ID:* \`${userId}\`\n` +
+        `🛡️ *Gban Federación Cancerberos*\n\n` +
+        `🆔 *ID Activo:* [${userId}](tg://user?id=${userId})\n` +
         `🏷️ *Username:* ${usernameLabel}\n` +
         `📝 *Motivo:* ${motivo}\n` +
         `📍 *Origen:* ${grupoOrigen}`,
