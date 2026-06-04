@@ -89,7 +89,7 @@ function nombreInvalido(nombre) {
 
   if (/(.)\1{2,}/.test(sinEspacios)) return true;
 
-  // FILTRO ALFABETOS NO LATINOS (Chino, Árabe, Ruso, etc.)
+  // Filtro de Alfabetos No Latinos (Chino, Árabe, Cirílico, etc.)
   const soloTexto = limpio.replace(/[\d\s\p{P}\p{S}\p{Emoji}]/gu, '');
   if (soloTexto.length > 0) {
     const regexLatina = /^[\p{Script=Latin}]+$/u;
@@ -142,7 +142,7 @@ function autoDelete(ctx, mensaje) {
       if (idx !== -1) lista.splice(idx, 1);
     }, 240000); 
     
-  }).catch(err => console.error("❌ Error en autoDelete:", err.message));
+  }).catch(err => console.error("❌ Error en autoDelete al enviar:", err.message));
 }
 
 function actualizarGrupo(chatId, procesados, rechazados) {
@@ -250,7 +250,7 @@ bot.on('callback_query', async (ctx) => {
   const userId = ctx.from.id;
 
   if (data.startsWith("ban_")) {
-    const targetUid = parseInt(data.split("_")[1]);
+    const targetUid = String(data.split("_")[1]);
     const chatId = ctx.callbackQuery.message.chat.id; 
     const esAdmin = await esAdminDelGrupo(ctx, userId);
 
@@ -287,11 +287,11 @@ bot.on('callback_query', async (ctx) => {
       };
 
       autoDelete(pseudoCtx, {
-        text: `👋 Bienvenido *${ctx.from.first_name}* ${username} (ID: ${ctx.from.id}) al grupo *${grupoNombre}*!`,
+        text: `👋 Bienvenido *${ctx.from.first_name}* ${username} (ID: \`${userId}\`) al grupo *${grupoNombre}*!`,
         options: {
           parse_mode: "Markdown",
           reply_markup: {
-            inline_keyboard: [[{ text: "🚨 Banear", callback_data: `ban_${ctx.from.id}` }]]
+            inline_keyboard: [[{ text: "🚨 Banear", callback_data: `ban_${userId}` }]]
           }
         }
       });
@@ -397,26 +397,25 @@ async function esAdminDelGrupo(ctx, userId) {
   }
 }
 
+// 🛡️ SECCIÓN GBAN ULTRA-COMPACTA (Soporte nativo para strings e IDs Int64)
 bot.command('gban', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) return ctx.reply("❌ Solo los administradores pueden usar este comando.");
 
   const args = ctx.message.text.split(" ").slice(1);
-  let userId;
+  let userId; 
   let motivo = "Sin motivo especificado";
   let usernameLabel = "(sin username)";
-  let nombreUsuario = "Usuario Externo";
   const grupoOrigen = ctx.chat.title || "Grupo de Origen";
 
   if (ctx.message.reply_to_message) {
     const target = ctx.message.reply_to_message.from;
-    userId = target.id;
-    nombreUsuario = target.first_name || "Usuario";
+    userId = String(target.id);
     usernameLabel = target.username ? `@${target.username}` : "(sin username)";
     if (args.length > 0) motivo = args.join(" ");
   } 
   else if (args[0] && /^-?\d+$/.test(args[0])) {
-    userId = Number(args[0]);
+    userId = String(args[0]);
     if (args.length > 1) motivo = args.slice(1).join(" ");
   }
 
@@ -443,12 +442,10 @@ bot.command('gban', async (ctx) => {
       const sent = await ctx.telegram.sendMessage(
         chatId,
         `🛡️ *Gban de Federación Cancerberos*\n\n` +
-        `👤 *Usuario:* ${nombreUsuario}\n` +
-        `🏷️ *Username:* ${usernameLabel}\n` +
         `🆔 *ID:* \`${userId}\`\n` +
+        `🏷️ *Username:* ${usernameLabel}\n` +
         `📝 *Motivo:* ${motivo}\n` +
-        `📍 *Generado en:* ${grupoOrigen}\n` +
-        `🌐 *Grupos Procesados:* ${completados}`,
+        `📍 *Origen:* ${grupoOrigen}`,
         { parse_mode: "Markdown" }
       ).catch(() => {});
 
@@ -459,8 +456,6 @@ bot.command('gban', async (ctx) => {
       }
     } catch (e) {}
   }
-
-  ctx.reply(`📢 Global Ban completado en ${completados} comunidades operativas.`);
 });
 
 // --- BLOQUE 10: Configuración de Webhook para Railway ---
