@@ -195,29 +195,33 @@ function obtenerReglamento(chatId) {
   }
 }
 
+// --- BLOQUE: Manejo de solicitudes de ingreso ---
 bot.on('chat_join_request', async (ctx) => {
-  const chatId = String(ctx.chat.id);
-  const grupo = gruposActivos.get(chatId);
-  if (!grupo || !gruposAutorizados.has(chatId)) return;
-
-  const user = ctx.chatJoinRequest.from;
-
-  if (grupo.pausado) {
-    gruposPendientes.set(user.id, { chatId, user, tipo: "solicitud" });
-    return autoDelete(ctx, `⏸️ Usuario *${user.first_name}* quedó en espera porque el grupo está pausado.`);
-  }
-
-  if (nombreInvalido(user.first_name)) {
-    await ctx.telegram.declineChatJoinRequest(chatId, user.id);
-    grupo.usuariosRechazados = (grupo.usuariosRechazados || 0) + 1;
-    guardarGrupos();
-    return autoDelete(ctx, `🚫 Usuario *${user.first_name}* fue rechazado por nombre inválido.`);
-  }
-
-  const mensajeReglamento = escapeMarkdownV2(obtenerReglamento(chatId)) + 
-    "\n\n¿Aceptas el reglamento para ingresar?";
-
   try {
+    const chatId = String(ctx.chat.id);
+    const grupo = gruposActivos.get(chatId);
+    if (!grupo || !gruposAutorizados.has(chatId)) return;
+
+    const user = ctx.chatJoinRequest.from;
+
+    // Si el grupo está pausado, guardar en espera
+    if (grupo.pausado) {
+      gruposPendientes.set(user.id, { chatId, user, tipo: "solicitud" });
+      return autoDelete(ctx, `⏸️ Usuario *${user.first_name}* quedó en espera porque el grupo está pausado.`);
+    }
+
+    // Validación de nombre inválido
+    if (nombreInvalido(user.first_name)) {
+      await ctx.telegram.declineChatJoinRequest(chatId, user.id);
+      grupo.usuariosRechazados = (grupo.usuariosRechazados || 0) + 1;
+      guardarGrupos();
+      return autoDelete(ctx, `🚫 Usuario *${user.first_name}* fue rechazado por nombre inválido.`);
+    }
+
+    // Mensaje de reglamento
+    const mensajeReglamento = escapeMarkdownV2(obtenerReglamento(chatId)) +
+      "\n\n¿Aceptas el reglamento para ingresar?";
+
     await ctx.telegram.sendMessage(user.id, mensajeReglamento, {
       parse_mode: "MarkdownV2",
       reply_markup: {
@@ -228,11 +232,19 @@ bot.on('chat_join_request', async (ctx) => {
       }
     });
   } catch (err) {
-    console.error("❌ No se pudo enviar privado:", err.message);
-    await ctx.telegram.declineChatJoinRequest(chatId, user.id);
-    autoDelete(ctx, `⚠️ Usuario *${user.first_name}* debe abrir chat con el bot para ingresar. Solicitud rechazada.`);
+    console.error("❌ Error al procesar chat_join_request:", err.message);
+    try {
+      // Si falla el envío de privado, rechazar solicitud
+      const chatId = String(ctx.chat.id);
+      const user = ctx.chatJoinRequest.from;
+      await ctx.telegram.declineChatJoinRequest(chatId, user.id);
+      autoDelete(ctx, `⚠️ Usuario *${user.first_name}* debe abrir chat con el bot para ingresar. Solicitud rechazada.`);
+    } catch (err2) {
+      console.error("❌ Error adicional al rechazar solicitud:", err2.message);
+    }
   }
 });
+
 
 // --- BLOQUE 7: Manejo de callback_query (unificado) ---
 bot.on("callback_query", async (ctx) => {
