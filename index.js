@@ -116,6 +116,30 @@ async function esAdminDelGrupo(ctx, userId) {
     return false;
   }
 }
+
+// --- BLOQUE 4: Middleware global para autoDelete ---
+bot.use(async (ctx, next) => {
+  const originalReply = ctx.reply.bind(ctx);
+  const originalSendMessage = ctx.telegram.sendMessage.bind(ctx.telegram);
+
+  ctx.reply = (...args) => {
+    const mensaje = args.length === 1 ? args[0] : { text: args[0], options: args[1] };
+    return autoDelete(ctx, mensaje);
+  };
+
+  ctx.telegram.sendMessage = (chatId, text, options) => {
+    if (text.includes("Tiempo restante")) {
+      return originalSendMessage(chatId, text, options);
+    }
+    return autoDelete(
+      { chat: { id: chatId }, telegram: ctx.telegram, reply: (t, o) => originalSendMessage(chatId, t, o) },
+      { text, options }
+    );
+  };
+
+  await next();
+});
+
 // --- BLOQUE 4: Validaciones de nombres ---
 function nombreInvalido(nombre) {
   if (!nombre) return true;
