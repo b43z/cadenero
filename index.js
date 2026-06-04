@@ -77,7 +77,7 @@ function nombreInvalido(nombre) {
   }
 
   // Regla 8: Letras repetidas (3 o más consecutivas ej: "aaasdf", "gerrr")
-  if (/(.){2,}/.test(sinEspacios)) return true;
+  if (/(.)\1{2,}/.test(sinEspacios)) return true;
 
   return false;
 }
@@ -94,10 +94,11 @@ function registrarGrupo(chatId, nombre) {
     });
     gruposAutorizados.add(idStr);
     guardarGrupos();
-    console.log(`✅ Grupo registrado y autorizado: ${nombre} (${idStr})`);
+    console.log(`✅ Grupo registrado y authorized: ${nombre} (${idStr})`);
   }
 }
 
+// Historial limpio: Borra el mensaje anterior inmediatamente al enviar uno nuevo
 function autoDelete(ctx, mensaje) {
   const chatId = String(ctx.chat.id);
   const sendPromise = typeof mensaje === "string"
@@ -147,7 +148,7 @@ async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
       actualizarGrupo(chatId, 0, 1);
       autoDelete(ctx, `🚫 Usuario *${user.first_name}* ${username} (ID: ${user.id}) fue rechazado por nombre inválido.`);
     } catch (err) {
-      console.error("❌ Error al rechazazar solicitud:", err.message);
+      console.error("❌ Error al rechazar solicitud:", err.message);
     }
   } else {
     try {
@@ -180,7 +181,7 @@ bot.on('chat_join_request', async (ctx) => {
   await evaluarSolicitud(ctx, ctx.chatJoinRequest.from, chatId, grupo.nombre);
 });
 
-// --- BLOQUE 4C: Activación automática + Procesamiento en lote ---
+// --- BLOQUE 4C: Activación automática por asignación de permisos + Procesamiento en lote ---
 bot.on('chat_member', async (ctx) => {
   const chatId = String(ctx.chat.id);
   const { old_chat_member, new_chat_member } = ctx.chatMember;
@@ -190,13 +191,12 @@ bot.on('chat_member', async (ctx) => {
 
   if (!eraAdmin && esAdminAhora) {
     if (new_chat_member.can_invite_users) {
-      console.log(`⚡ Bot detectado como Administrador con permisos en: ${ctx.chat.title} (${chatId})`);
+      console.log(`⚡ Bot detectado como Administrator con permisos en: ${ctx.chat.title} (${chatId})`);
       
       registrarGrupo(chatId, ctx.chat.title || "Grupo de Telegram");
       const grupo = gruposActivos.get(chatId);
 
-      ctx.reply(`⚙️ *¡Sistema de Control Activado!*
-He tomado el control del grupo *${grupo.nombre}* con éxito. Revisando si existen solicitudes de unión pendientes...`, { parse_mode: "Markdown" });
+      ctx.reply(`⚙️ *¡Sistema de Control Activado!*\nHe tomado el control del grupo *${grupo.nombre}* con éxito. Revisando si existen solicitudes de unión pendientes...`, { parse_mode: "Markdown" });
 
       try {
         const solicitudesPendientes = await ctx.telegram.getChatJoinRequests(chatId);
@@ -208,6 +208,8 @@ He tomado el control del grupo *${grupo.nombre}* con éxito. Revisando si existe
             await evaluarSolicitud(ctx, solicitud.from, chatId, grupo.nombre);
             await new Promise(resolve => setTimeout(resolve, 300));
           }
+        } else {
+          console.log("🧹 No se encontraron solicitudes acumuladas. Esperando nuevos ingresos...");
         }
       } catch (err) {
         console.error("❌ Error al intentar procesar solicitudes acumuladas en lote:", err.message);
@@ -252,11 +254,8 @@ bot.start((ctx) => {
   const grupo = gruposActivos.get(chatId);
 
   return ctx.reply(
-    `👋 Bot activo en el grupo *${grupo.nombre}*.
-
-` +
-    `📊 Usuarios procesados: ${grupo.usuariosProcesados}
-` +
+    `👋 Bot activo en el grupo *${grupo.nombre}*.\n\n` +
+    `📊 Usuarios procesados: ${grupo.usuariosProcesados}\n` +
     `🚫 Usuarios rechazados: ${grupo.usuariosRechazados}`,
     { parse_mode: "Markdown" }
   );
@@ -271,7 +270,7 @@ async function esAdminDelGrupo(ctx, userId) {
   }
 }
 
-// 🛡️ SECCIÓN ACTUALIZADA CON LA IDENTIDAD DE FEDERACIÓN CANCERBEROS
+// 🛡️ SECCIÓN CORREGIDA CON LA IDENTIDAD DE FEDERACIÓN CANCERBEROS
 bot.command('gban', async (ctx) => {
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) return ctx.reply("❌ Solo los administradores pueden usar este comando.");
@@ -313,7 +312,7 @@ bot.command('gban', async (ctx) => {
         `🛡️ *GBAN de Federación Cancerberos*\n\n` +
         `👤 *Usuario:* ${nombreUsuario}\n` +
         `🏷️ *Username:* ${usernameLabel}\n` +
-        `🆔 *ID:* \\`${userId}\\`\n` +
+        `🆔 *ID:* \`${userId}\`\n` +
         `📝 *Motivo:* ${motivo}\n\n` +
         `🛑 _Estado: Baneo preventivo aplicado globalmente._`,
         { parse_mode: "Markdown" }
@@ -329,7 +328,7 @@ bot.command('gban', async (ctx) => {
     }
   }
 
-  ctx.reply(`📢 Global Ban procesado.\nExpulsado/Bloqueado preventivamente en ${completados} grupos activos para el ID: \\`${userId}\\`.`);
+  ctx.reply(`📢 Global Ban procesado.\nExpulsado/Bloqueado preventivamente en ${completados} grupos activos para el ID: \`${userId}\`.`);
 });
 
 // --- BLOQUE 10: Configuración de Webhook para Railway ---
@@ -356,4 +355,3 @@ process.on('unhandledRejection', (reason) => {
 });
 
 console.log("✅ Bot inicializado correctamente con Webhook en Railway.");
-
