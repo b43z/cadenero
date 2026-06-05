@@ -1,3 +1,4 @@
+// There is a file you can reference named "gemini-code-1780617181157.js". Refer to this file by its name verbatim.
 // --- BLOQUE 1: Imports, inicialización y persistencia ---
 const { Telegraf } = require('telegraf');
 const fs = require('fs');
@@ -240,7 +241,7 @@ bot.on('chat_member', async (ctx) => {
         const solicitudesPendientes = await ctx.telegram.getChatJoinRequests(chatId);
         if (solicitudesPendientes && solicitudesPendientes.length > 0) {
           for (const solicitud of solicitudesPendientes) {
-            await evaluarSolicitud(ctx, solicitud.from, chatId, grupo.nombre);
+            await evaluarSolicitud(ctx, solicitud.from, chatId, group.nombre);
             await new Promise(resolve => setTimeout(resolve, 300));
           }
         }
@@ -401,7 +402,7 @@ bot.command('reglas', async (ctx) => {
   }
 
   const grupo = gruposActivos.get(chatId);
-  const numReglamento = grupo.reglamento || 1; // Corregido 'group' por 'grupo'
+  const numReglamento = grupo.reglamento || 1; 
   const textoReglamento = REGLAMENTOS[numReglamento];
 
   autoDelete(ctx, {
@@ -438,7 +439,7 @@ bot.help((ctx) => {
   return ctx.reply(manualAyuda, { parse_mode: "Markdown" });
 });
 
-// 🛡️ SECCIÓN GBAN ULTRA-COMPACTA
+// 🛡️ SECCIÓN GBAN OPTIMIZADA
 bot.command('gban', async (ctx) => {
   if (ctx.chat.type === 'private') {
     return ctx.reply("❌ Este comando solo funciona dentro de grupos.");
@@ -459,8 +460,8 @@ bot.command('gban', async (ctx) => {
     usernameLabel = target.username ? `@${target.username}` : "(sin username)";
     if (args.length > 0) motivo = args.join(" ");
   } 
-  else if (args[0] && /^-?\d+$/.test(args[0])) {
-    userId = String(args[0]);
+  else if (args[0] && /^\d+$/.test(args[0].trim())) {
+    userId = String(args[0].trim());
     if (args.length > 1) motivo = args.slice(1).join(" ");
   }
 
@@ -469,12 +470,13 @@ bot.command('gban', async (ctx) => {
   }
 
   if (!userId) {
-    return ctx.reply("⚠️ Uso: \`/gban <id_usuario>\` o responde al mensaje del usuario con \`/gban [motivo]\`.", { parse_mode: "Markdown" });
+    return ctx.reply("⚠️ Uso: \`/gban <id_usuario_positivo>\` o responde al mensaje del usuario con \`/gban [motivo]\`.", { parse_mode: "Markdown" });
   }
 
   // Ejecución del baneo global en los chats mapeados
   for (const [chatId] of gruposActivos.entries()) {
     try {
+      if (userId.startsWith("-")) continue; 
       await ctx.telegram.banChatMember(chatId, userId);
     } catch (err) {
       console.error(`❌ Error aplicando ban global en ${chatId}:`, err.message);
