@@ -1,6 +1,6 @@
 // ============================================================================
 //   SISTEMA DE CONTROL — FEDERACIÓN CANCERBEROS
-//   Archivo: index.js (Versión Unificada Completa en HTML)
+//   Archivo: index.js (Versión Unificada Completa con Interfaz Visual Mejorada)
 // ============================================================================
 
 // --- BLOQUE 1: Imports, inicialización y persistencia ---
@@ -202,17 +202,31 @@ async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
     const numReglamento = grupo.reglamento || 1;
     const textoReglamento = REGLAMENTOS[numReglamento];
 
+    // ⚡ INTERFAZ MEJORADA: Bloque de advertencia visual y estructurado
+    const mensajeLlamativo = 
+      `⚡ <b>¡SOLICITUD RECIBIDA CON ÉXITO!</b> ⚡\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+      `Hola <b>${user.first_name}</b>, para completar tu ingreso al grupo: \n` +
+      `🛡️ <b>${grupoNombre}</b> 🛡️\n\n` +
+      `⚠️ <b>REQUISITO OBLIGATORIO:</b>\n` +
+      `Debes leer el reglamento interno abajo y presionar el botón de <b>✅ Aceptar Reglamento</b>. Si cierras o ignoras este chat, tu solicitud será rechazada.\n\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+      `${textoReglamento}\n` +
+      `━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+
     try {
       await ctx.telegram.sendMessage(
         user.id,
-        `👋 ¡Hola! Para ingresar al grupo <b>${grupoNombre}</b>, primero debes leer y aceptar sus normas:\n\n${textoReglamento}`,
+        mensajeLlamativo,
         {
           parse_mode: "HTML",
           reply_markup: {
             inline_keyboard: [
               [
-                { text: "✅ Aceptar Reglamento", callback_data: `reg_ok_${chatId}` },
-                { text: "❌ CV", callback_data: `reg_no_${chatId}` }
+                { text: "✅ Aceptar Reglamento y Entrar", callback_data: `reg_ok_${chatId}` }
+              ],
+              [
+                { text: "❌ Rechazar / Cancelar", callback_data: `reg_no_${chatId}` }
               ]
             ]
           }
@@ -419,7 +433,6 @@ bot.command('setrules', async (ctx) => {
   return ctx.reply(`⚙️ <b>Configuración Aplicada</b>\nEste grupo ahora exigirá que se apruebe el <b>Reglamento ${seleccion}</b> en el chat privado antes de permitir el ingreso.`, { parse_mode: "HTML" });
 });
 
-// NUEVO COMANDO INDEPENDIENTE: Alternar visibilidad de las bienvenidas
 bot.command('logbienvenida', async (ctx) => {
   const chatId = String(ctx.chat.id);
   if (ctx.chat.type === 'private') {
@@ -443,7 +456,6 @@ bot.command('logbienvenida', async (ctx) => {
   return ctx.reply(`⚙️ Mensajes de <b>bienvenida</b> ahora están: <b>${estado}</b>`, { parse_mode: "HTML" });
 });
 
-// NUEVO COMANDO INDEPENDIENTE: Alternar visibilidad de los rechazos
 bot.command('logrechazo', async (ctx) => {
   const chatId = String(ctx.chat.id);
   if (ctx.chat.type === 'private') {
@@ -459,7 +471,7 @@ bot.command('logrechazo', async (ctx) => {
 
   const grupo = gruposActivos.get(chatId);
   grupo.verRechazo = grupo.verRechazo !== false ? false : true;
-  const estado = grupo.verRechazo ? "🟢 VISIBLES" : "🔴 OCULTOS";
+  const estado = group.verRechazo ? "🟢 VISIBLES" : "🔴 OCULTOS";
 
   gruposActivos.set(chatId, grupo);
   guardarGrupos();
