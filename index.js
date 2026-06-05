@@ -73,28 +73,32 @@ function cargarGrupos() {
 cargarGrupos();
 
 // --- BLOQUE 2: Validaciones y utilidades ---
+async function esAdminDelGrupo(ctx, userId) {
+  try {
+    const admins = await ctx.getChatAdministrators();
+    return admins.some(admin => admin.user.id === userId);
+  } catch {
+    return false;
+  }
+}
+
 function nombreInvalido(nombre) {
   if (!nombre) return true;
   const prohibidos = ["http", "https", "www", ".com", ".net", ".org"];
   const limpio = nombre.trim();
   const sinEspacios = limpio.replace(/\s+/g, '');
 
-  // 1. Filtro estricto contra enlaces o spam evidente
   if (prohibidos.some(p => limpio.toLowerCase().includes(p))) return true;
   
-  // 2. Extracción de letras base ignorando números, espacios, puntuación, símbolos y emojis
   const soloTexto = limpio.replace(/[\d\s\p{P}\p{S}\p{Emoji}]/gu, '');
   
-  // Exigir que tenga al menos 3 letras reales
   if (soloTexto.length < 3) return true;
   
-  // Filtro de Alfabetos No Latinos en el texto real (Chino, Árabe, Cirílico, etc.)
   const regexLatina = /^[\p{Script=Latin}]+$/u;
   if (!regexLatina.test(soloTexto)) return true;
 
-  // 3. Validaciones secundarias sobre estructura
   if (/^\d+$/.test(sinEspacios)) return true;
-  if (/(.)\1{2,}/.test(sinEspacios)) return true; // Evita repetición exagerada (ej. Lluuuuna)
+  if (/(.)\1{2,}/.test(sinEspacios)) return true; 
 
   if (soloTexto.length <= 4) {
     const tieneVocal = /[aeiouáéíóúüy]/i.test(soloTexto);
@@ -279,14 +283,11 @@ bot.on('callback_query', async (ctx) => {
     const grupoNombre = grupo ? grupo.nombre : "el grupo";
 
     try {
-      // 1. Aprobar primero la solicitud de acceso al grupo (Acción prioritaria)
       await ctx.telegram.approveChatJoinRequest(targetChatId, userId);
       actualizarGrupo(targetChatId, 1, 0);
 
-      // 2. Eliminar el mensaje de reglamento con botones inmediatamente del privado
       await ctx.deleteMessage(messageId).catch(() => {});
 
-      // 3. Intentar enviar mensaje de éxito efímero en privado de forma aislada
       try {
         const msgConfirmacion = await ctx.reply(`✅ ¡Perfecto! Has aceptado el reglamento. Ya puedes ingresar y participar en *${grupoNombre}*.`);
         setTimeout(() => {
@@ -296,7 +297,6 @@ bot.on('callback_query', async (ctx) => {
         console.log(`ℹ️ El usuario ${userId} cerró el chat privado antes de enviar el texto de confirmación.`);
       }
 
-      // 4. Enviar la bienvenida con su respectivo botón de Ban al grupo de origen (ID Activo e interactivo)
       const username = ctx.from.username ? `@${ctx.from.username}` : "(sin username)";
       
       const pseudoCtx = {
@@ -329,7 +329,6 @@ bot.on('callback_query', async (ctx) => {
       await ctx.telegram.declineChatJoinRequest(targetChatId, userId);
       actualizarGrupo(targetChatId, 0, 1);
       
-      // Cambiar texto a denegado y borrarlo a los 5 segundos para mantener limpio el chat privado del bot
       await ctx.editMessageText("❌ Has rechazado el reglamento. Tu solicitud de acceso al grupo fue denegada.");
       setTimeout(() => {
         ctx.deleteMessage(messageId).catch(() => {});
@@ -390,7 +389,6 @@ bot.command('setrules', async (ctx) => {
   return ctx.reply(`⚙️ *Configuración Aplicada*\nEste grupo ahora exigirá que se apruebe el *Reglamento ${seleccion}* en el chat privado antes de permitir el ingreso.`, { parse_mode: "Markdown" });
 });
 
-// 📖 Comando /reglas para mostrar el reglamento configurado con auto-delete
 bot.command('reglas', async (ctx) => {
   const chatId = String(ctx.chat.id);
 
@@ -403,7 +401,7 @@ bot.command('reglas', async (ctx) => {
   }
 
   const grupo = gruposActivos.get(chatId);
-  const numReglamento = group.reglamento || 1; 
+  const numReglamento = grupo.reglamento || 1; // Corregido 'group' por 'grupo'
   const textoReglamento = REGLAMENTOS[numReglamento];
 
   autoDelete(ctx, {
@@ -440,17 +438,12 @@ bot.help((ctx) => {
   return ctx.reply(manualAyuda, { parse_mode: "Markdown" });
 });
 
-async function esAdminDelGrupo(ctx, userId) {
-  try {
-    const admins = await ctx.getChatAdministrators();
-    return admins.some(admin => admin.user.id === userId);
-  } catch {
-    return false;
-  }
-}
-
-// 🛡️ SECCIÓN GBAN ULTRA-COMPACTA (Soporte nativo para strings e IDs Int64 con enlaces interactivos)
+// 🛡️ SECCIÓN GBAN ULTRA-COMPACTA
 bot.command('gban', async (ctx) => {
+  if (ctx.chat.type === 'private') {
+    return ctx.reply("❌ Este comando solo funciona dentro de grupos.");
+  }
+
   const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
   if (!esAdmin) return ctx.reply("❌ Solo los administradores pueden usar este comando.");
 
@@ -479,17 +472,17 @@ bot.command('gban', async (ctx) => {
     return ctx.reply("⚠️ Uso: \`/gban <id_usuario>\` o responde al mensaje del usuario con \`/gban [motivo]\`.", { parse_mode: "Markdown" });
   }
 
-  let completados = 0;
-  for (const [chatId, grupo] of gruposActivos.entries()) {
+  // Ejecución del baneo global en los chats mapeados
+  for (const [chatId] of gruposActivos.entries()) {
     try {
       await ctx.telegram.banChatMember(chatId, userId);
-      completados++;
     } catch (err) {
       console.error(`❌ Error aplicando ban global en ${chatId}:`, err.message);
     }
   }
 
-  for (const [chatId, grupo] of gruposActivos.entries()) {
+  // Notificación del Gban en los canales correspondientes
+  for (const [chatId] of gruposActivos.entries()) {
     try {
       const sent = await ctx.telegram.sendMessage(
         chatId,
@@ -522,7 +515,7 @@ app.get('/', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor escuchando en puerto ${PORT}`);
+  console.log("🚀 Servidor escuchando en puerto " + PORT);
 });
 
 process.on('uncaughtException', (err) => {
