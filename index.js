@@ -1,4 +1,8 @@
-// There is a file you can reference named "gemini-code-1780617181157.js". Refer to this file by its name verbatim.
+// ============================================================================
+//   SISTEMA DE CONTROL — FEDERACIÓN CANCERBEROS
+//   Archivo: index.js (Versión Unificada Completa en HTML)
+// ============================================================================
+
 // --- BLOQUE 1: Imports, inicialización y persistencia ---
 const { Telegraf } = require('telegraf');
 const fs = require('fs');
@@ -17,32 +21,32 @@ const mensajesActivos = new Map(); // chatId -> array de message_id
 
 const FILE_GRUPOS = 'gruposActivos.json';
 
-// Textos de Reglamentos de la Comunidad (Formato corregido y optimizado)
+// Textos de Reglamentos de la Comunidad en HTML para consistencia total
 const REGLAMENTOS = {
-  1: `💬 *COTORREO* 💬
-Este es un grupo para pláticas y desmadre. **NO es un espacio XXX, HOT ni de encuentros.**
+  1: `💬 <b>COTORREO</b> 💬
+Este es un grupo para pláticas y desmadre. <b>NO es un espacio XXX, HOT ni de encuentros.</b>
 
-⚰️ *Reglamento* ⚰️
-💀 **Preséntate:** interactúa, no seas un "mueble" o serás expulsado.
-💀 **Estrictamente prohibido:** Enviar fotopitos al grupo, CP, Gore, Zoo, etc.
-💀 **Sin Spam:** No Ventas, Hackeos, Chantajes, links/grupos, NvXNv, Cambios, etc.
-💀 **Creadoras de Contenido:** Pide permiso a un Admin y verifícate.
-💀 **Material Temporal:** Solo Material propio +18 (se Elimina Auto).
-💀 **Respeta el Privado:** No acoso PV (DM) / Agg cotorrea en el grupo.
-💀 **Garantía:** La compra de conte es bajo tu riesgo; el staff no se hace responsable.
-💀 **Límites:** No confundas el cotorreo con el bullying.`,
+⚰️ <i>Reglamento</i> ⚰️
+💀 <b>Preséntate:</b> interactúa, no seas un "mueble" o serás expulsado.
+💀 <b>Estrictamente prohibido:</b> Enviar fotopitos al grupo, CP, Gore, Zoo, etc.
+💀 <b>Sin Spam:</b> No Ventas, Hackeos, Chantajes, links/grupos, NvXNv, Cambios, etc.
+💀 <b>Creadoras de Contenido:</b> Pide permiso a un Admin y verifícate.
+💀 <b>Material Temporal:</b> Solo Material propio +18 (se Elimina Auto).
+💀 <b>Respeta el Privado:</b> No acoso PV (DM) / Agg cotorrea en el grupo.
+💀 <b>Garantía:</b> La compra de conte es bajo tu riesgo; el staff no se hace responsable.
+💀 <b>Límites:</b> No confundas el cotorreo con el bullying.`,
 
-  2: `🔥*COTORREO HOT*🔥
+  2: `🔥<b>COTORREO HOT</b>🔥
 Espacio para conocer Gente HOT, interactuar de forma caliente y promover contenido, sin caer en el morbo pesado.
 
-⚰️ *Reglamento* ⚰️
-💀 **Actividad:** Intégrate al desmadre, evita quedarte de "mueble".
-💀 **Estrictamente prohibido:** Fotopitos, CP, Gore, Zoo, Material Ilegal, etc.
-💀 **Sin Spam:** No Ventas, Hackeos, Chantajes, links/grupos, NvXNv, Cambios, etc.
-💀 **Creadoras de Contenido:** Pide permiso y verifícate.
-💀 **Material Temporal:** Solo Material +18 Propio, no dormidas, filtrados, exs, (se Elimina Auto).
-💀 **Respeta el Privado:** No acoso PV (DM) / Agg cotorrea en el grupo.
-💀 **Garantía:** La compra de conte es bajo tu riesgo; el staff no se hace responsable.`
+⚰️ <i>Reglamento</i> ⚰️
+💀 <b>Actividad:</b> Intégrate al desmadre, evita quedarte de "mueble".
+💀 <b>Estrictamente prohibido:</b> Fotopitos, CP, Gore, Zoo, Material Ilegal, etc.
+💀 <b>Sin Spam:</b> No Ventas, Hackeos, Chantajes, links/grupos, NvXNv, Cambios, etc.
+💀 <b>Creadoras de Contenido:</b> Pide permiso y verifícate.
+💀 <b>Material Temporal:</b> Solo Material +18 Propio, no dormidas, filtrados, exs, (se Elimina Auto).
+💀 <b>Respeta el Privado:</b> No acoso PV (DM) / Agg cotorrea en el grupo.
+💀 <b>Garantía:</b> La compra de conte es bajo tu riesgo; el staff no se hace responsable.`
 };
 
 function guardarGrupos() {
@@ -167,13 +171,17 @@ function actualizarGrupo(chatId, procesados, rechazados) {
 }
 
 async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
-  const username = user.username ? `@${user.username}` : "(sin username)";
+  const username = user.username ? ` 🆔 @${user.username}` : " 🆔 (sin username)";
 
   if (nombreInvalido(user.first_name)) {
     try {
       await ctx.telegram.declineChatJoinRequest(chatId, user.id);
       actualizarGrupo(chatId, 0, 1);
-      autoDelete(ctx, `🚫 Usuario *${user.first_name}* ${username} (ID: [${user.id}](tg://user?id=${user.id})) rechazado: nombre inválido o alfabeto no permitido.`);
+      // CUADRE: Mensaje de rechazo adaptado a HTML con ID limpio e interactivo
+      autoDelete(ctx, {
+        text: `🚫 Usuario <b>${user.first_name}</b>${username} (ID: <a href="tg://user?id=${user.id}">${user.id}</a>) rechazado: nombre inválido o alfabeto no permitido.`,
+        options: { parse_mode: "HTML" }
+      });
     } catch (err) {
       console.error("❌ Error al rechazar solicitud automática:", err.message);
     }
@@ -185,9 +193,9 @@ async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
     try {
       await ctx.telegram.sendMessage(
         user.id,
-        `👋 ¡Hola! Para ingresar al grupo *${grupoNombre}*, primero debes leer y aceptar sus normas:\n\n${textoReglamento}`,
+        `👋 ¡Hola! Para ingresar al grupo <b>${grupoNombre}</b>, primero debes leer y aceptar sus normas:\n\n${textoReglamento}`,
         {
-          parse_mode: "Markdown",
+          parse_mode: "HTML",
           reply_markup: {
             inline_keyboard: [
               [
@@ -199,7 +207,7 @@ async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
         }
       );
     } catch (err) {
-      console.error(`⚠️ El usuario ${user.id} tiene el privado cerrado. Rechazando por seguridad:`, err.message);
+      console.error(`⚠️ El usuario ${user.id} tiene el privado cerrado. Enfoque preventivo ejecutado:`, err.message);
       try {
         await ctx.telegram.declineChatJoinRequest(chatId, user.id);
         actualizarGrupo(chatId, 0, 1);
@@ -235,13 +243,14 @@ bot.on('chat_member', async (ctx) => {
       registrarGrupo(chatId, ctx.chat.title || "Grupo de Telegram");
       const grupo = gruposActivos.get(chatId);
 
-      ctx.reply(`⚙️ *¡Sistema de Control Activado!*\nHe tomado el control del grupo *${grupo.nombre}* con éxito. Revisando si existen solicitudes de unión pendientes...`, { parse_mode: "Markdown" });
+      // CUADRE: Notificación de activación ajustada a HTML
+      ctx.reply(`⚙️ <b>¡Sistema de Control Activado!</b>\nHe tomado el control del grupo <b>${grupo.nombre}</b> con éxito. Revisando si existen solicitudes de unión pendientes...`, { parse_mode: "HTML" });
 
       try {
         const solicitudesPendientes = await ctx.telegram.getChatJoinRequests(chatId);
         if (solicitudesPendientes && solicitudesPendientes.length > 0) {
           for (const solicitud of solicitudesPendientes) {
-            await evaluarSolicitud(ctx, solicitud.from, chatId, group.nombre);
+            await evaluarSolicitud(ctx, solicitud.from, chatId, grupo.nombre);
             await new Promise(resolve => setTimeout(resolve, 300));
           }
         }
@@ -290,7 +299,7 @@ bot.on('callback_query', async (ctx) => {
       await ctx.deleteMessage(messageId).catch(() => {});
 
       try {
-        const msgConfirmacion = await ctx.reply(`✅ ¡Perfecto! Has aceptado el reglamento. Ya puedes ingresar y participar en *${grupoNombre}*.`);
+        const msgConfirmacion = await ctx.reply(`✅ ¡Perfecto! Has aceptado el reglamento. Ya puedes ingresar y participar en <b>${grupoNombre}</b>.`, { parse_mode: "HTML" });
         setTimeout(() => {
           ctx.deleteMessage(msgConfirmacion.message_id).catch(() => {});
         }, 6000);
@@ -298,7 +307,8 @@ bot.on('callback_query', async (ctx) => {
         console.log(`ℹ️ El usuario ${userId} cerró el chat privado antes de enviar el texto de confirmación.`);
       }
 
-      const username = ctx.from.username ? `@${ctx.from.username}` : "(sin username)";
+      // CORRECCIÓN SOLICITADA: Ícono 🆔 acoplado exclusivamente al @username
+      const username = ctx.from.username ? ` 🆔 @${ctx.from.username}` : " 🆔 (sin username)";
       
       const pseudoCtx = {
         chat: { id: targetChatId },
@@ -306,10 +316,11 @@ bot.on('callback_query', async (ctx) => {
         deleteMessage: (msgId) => ctx.telegram.deleteMessage(targetChatId, msgId)
       };
 
+      // CORRECCIÓN SOLICITADA: Estructura HTML impecable con ID interactivo numérico activo
       autoDelete(pseudoCtx, {
-        text: `👋 ¡Bienvenido *${ctx.from.first_name}* ${username} (ID: [${userId}](tg://user?id=${userId})) al grupo *${grupoNombre}*!`,
+        text: `👋 ¡Bienvenido/a <b>${ctx.from.first_name}</b>${username} (ID: <a href="tg://user?id=${userId}">${userId}</a>) al grupo <b>${grupoNombre}</b>!`,
         options: {
-          parse_mode: "Markdown",
+          parse_mode: "HTML",
           reply_markup: {
             inline_keyboard: [[{ text: "🚨 Banear", callback_data: `ban_${userId}` }]]
           }
@@ -353,12 +364,13 @@ bot.start((ctx) => {
   registrarGrupo(chatId, ctx.chat.title);
   const grupo = gruposActivos.get(chatId);
 
+  // CUADRE: Panel de inicio unificado a HTML
   return ctx.reply(
-    `👋 Bot activo en el grupo *${grupo.nombre}*.\n\n` +
+    `👋 Bot activo en el grupo <b>${grupo.nombre}</b>.\n\n` +
     `📊 Usuarios procesados: ${grupo.usuariosProcesados}\n` +
     `🚫 Usuarios rechazados: ${grupo.usuariosRechazados}\n` +
     `⚙️ Reglamento actual: Reglamento ${grupo.reglamento || 1}`,
-    { parse_mode: "Markdown" }
+    { parse_mode: "HTML" }
   );
 });
 
@@ -375,7 +387,7 @@ bot.command('setrules', async (ctx) => {
   const seleccion = parseInt(args[0]);
 
   if (seleccion !== 1 && seleccion !== 2) {
-    return ctx.reply("⚠️ Sintaxis incorrecta. Define el reglamento usando:\n• \`/setrules 1\`\n• \`/setrules 2\`", { parse_mode: "Markdown" });
+    return ctx.reply("⚠️ Sintaxis incorrecta. Define el reglamento usando:\n• <code>/setrules 1</code>\n• <code>/setrules 2</code>", { parse_mode: "HTML" });
   }
 
   if (!gruposActivos.has(chatId)) {
@@ -387,7 +399,7 @@ bot.command('setrules', async (ctx) => {
   gruposActivos.set(chatId, grupo);
   guardarGrupos();
 
-  return ctx.reply(`⚙️ *Configuración Aplicada*\nEste grupo ahora exigirá que se apruebe el *Reglamento ${seleccion}* en el chat privado antes de permitir el ingreso.`, { parse_mode: "Markdown" });
+  return ctx.reply(`⚙️ <b>Configuración Aplicada</b>\nEste grupo ahora exigirá que se apruebe el <b>Reglamento ${seleccion}</b> en el chat privado antes de permitir el ingreso.`, { parse_mode: "HTML" });
 });
 
 bot.command('reglas', async (ctx) => {
@@ -406,40 +418,40 @@ bot.command('reglas', async (ctx) => {
   const textoReglamento = REGLAMENTOS[numReglamento];
 
   autoDelete(ctx, {
-    text: `📖 *Reglamento Vigente de: ${grupo.nombre}*\n\n${textoReglamento}`,
-    options: { parse_mode: "Markdown" }
+    text: `📖 <b>Reglamento Vigente de: ${grupo.nombre}</b>\n\n${textoReglamento}`,
+    options: { parse_mode: "HTML" }
   });
 });
 
 bot.help((ctx) => {
   const manualAyuda = 
-    `📖 *Manual de Comandos — Federación Cancerberos*\n\n` +
-    `🤖 *1. /start*\n` +
-    `• *Sintaxis:* \`/start\`\n` +
-    `• *Dónde:* Chat Privado y Grupos.\n\n` +
+    `📖 <b>Manual de Comandos — Federación Cancerberos</b>\n\n` +
+    `🤖 <b>1. /start</b>\n` +
+    `• <i>Sintaxis:</i> <code>/start</code>\n` +
+    `• <i>Dónde:</i> Chat Privado y Grupos.\n\n` +
 
-    `⚙️ *2. /setrules*\n` +
-    `• *Descripción:* Cambia el reglamento del grupo (1 o 2) que los usuarios deben firmar en privado.\n` +
-    `• *Sintaxis:* \`/setrules <1 o 2>\`\n` +
-    `• *Quién:* Administradores.\n\n` +
+    `⚙️ <b>2. /setrules</b>\n` +
+    `• <i>Descripción:</i> Cambia el reglamento del grupo (1 o 2) que los usuarios deben firmar en privado.\n` +
+    `• <i>Sintaxis:</i> <code>/setrules &lt;1 o 2&gt;</code>\n` +
+    `• <i>Quién:</i> Administradores.\n\n` +
 
-    `📖 *3. /reglas*\n` +
-    `• *Descripción:* Muestra las reglas actuales configuradas para este grupo. Desaparece en 4 minutos.\n` +
-    `• *Sintaxis:* \`/reglas\`\n` +
-    `• *Quién:* Cualquier miembro.\n\n` +
+    `📖 <b>3. /reglas</b>\n` +
+    `• <i>Descripción:</i> Muestra las reglas actuales configuradas para este grupo. Desaparece en 4 minutos.\n` +
+    `• <i>Sintaxis:</i> <code>/reglas</code>\n` +
+    `• <i>Quién:</i> Cualquier miembro.\n\n` +
     
-    `🛡️ *4. /gban*\n` +
-    `• *Descripción:* Ejecuta un baneo preventivo global en la red de grupos.\n` +
-    `• *Sintaxis:* \`/gban <id_numérico> [motivo]\` o respondiendo al mensaje del infractor.\n` +
-    `• *Quién:* Administradores.\n\n` +
+    `🛡️ <b>4. /gban</b>\n` +
+    `• <i>Descripción:</i> Ejecuta un baneo preventivo global en la red de grupos.\n` +
+    `• <i>Sintaxis:</i> <code>/gban &lt;id_numérico&gt; [motivo]</code> o respondiendo al mensaje del infractor.\n` +
+    `• <i>Quién:</i> Administradores.\n\n` +
     
-    `❓ *5. /help*\n` +
-    `• *Sintaxis:* \`/help\``;
+    `❓ <b>5. /help</b>\n` +
+    `• <i>Sintaxis:</i> <code>/help</code>`;
 
-  return ctx.reply(manualAyuda, { parse_mode: "Markdown" });
+  return ctx.reply(manualAyuda, { parse_mode: "HTML" });
 });
 
-// 🛡️ SECCIÓN GBAN OPTIMIZADA
+// 🛡️ SECCIÓN GBAN OPTIMIZADA (Sincronizada por completo a HTML)
 bot.command('gban', async (ctx) => {
   if (ctx.chat.type === 'private') {
     return ctx.reply("❌ Este comando solo funciona dentro de grupos.");
@@ -457,7 +469,7 @@ bot.command('gban', async (ctx) => {
   if (ctx.message.reply_to_message) {
     const target = ctx.message.reply_to_message.from;
     userId = String(target.id);
-    usernameLabel = target.username ? `@${target.username}` : "(sin username)";
+    usernameLabel = target.username ? `🆔 @${target.username}` : "🆔 (sin username)";
     if (args.length > 0) motivo = args.join(" ");
   } 
   else if (args[0] && /^\d+$/.test(args[0].trim())) {
@@ -470,38 +482,34 @@ bot.command('gban', async (ctx) => {
   }
 
   if (!userId) {
-    return ctx.reply("⚠️ Uso: \`/gban <id_usuario_positivo>\` o responde al mensaje del usuario con \`/gban [motivo]\`.", { parse_mode: "Markdown" });
+    return ctx.reply("⚠️ Uso: <code>/gban &lt;id_usuario_positivo&gt;</code> o responde al mensaje del usuario con <code>/gban [motivo]</code>.", { parse_mode: "HTML" });
   }
 
-// Ejecución del baneo global en los chats mapeados
+  // Ejecución del baneo global en los chats mapeados
   for (const [chatId] of gruposActivos.entries()) {
     try {
       if (userId.startsWith("-")) continue; 
-      
-      // Intentamos aplicar el baneo
       await ctx.telegram.banChatMember(chatId, userId);
     } catch (err) {
-      // Si el error es específicamente por ID inválido o cuenta inexistente, lo manejamos limpiamente
       if (err.message.includes("PARTICIPANT_ID_INVALID")) {
-        console.warn(`⚠️ Aviso: El ID ${userId} no es válido o ya no existe en el chat ${chatId}.`);
+        console.warn(`⚠️ El ID ${userId} no es válido o ya no existe en el chat ${chatId}.`);
       } else {
-        // Cualquier otro error (como falta de permisos del bot) se sigue registrando
         console.error(`❌ Error aplicando ban global en ${chatId}:`, err.message);
       }
     }
   }
 
-  // Notificación del Gban en los canales correspondientes
+  // CUADRE: Notificación global del Gban adaptada al nuevo formato HTML unificado
   for (const [chatId] of gruposActivos.entries()) {
     try {
       const sent = await ctx.telegram.sendMessage(
         chatId,
-        `🛡️ *Gban Federación Cancerberos*\n\n` +
-        `🆔 *ID Activo:* [${userId}](tg://user?id=${userId})\n` +
-        `🏷️ *Username:* ${usernameLabel}\n` +
-        `📝 *Motivo:* ${motivo}\n` +
-        `📍 *Origen:* ${grupoOrigen}`,
-        { parse_mode: "Markdown" }
+        `🛡️ <b>Gban Federación Cancerberos</b>\n\n` +
+        `🆔 <b>ID Activo:</b> <a href="tg://user?id=${userId}">${userId}</a>\n` +
+        `🏷️ <b>Username:</b> ${usernameLabel}\n` +
+        `📝 <b>Motivo:</b> ${motivo}\n` +
+        `📍 <b>Origen:</b> ${grupoOrigen}`,
+        { parse_mode: "HTML" }
       ).catch(() => {});
 
       if (sent) {
