@@ -66,7 +66,13 @@ function cargarGrupos() {
 
       grupos.forEach(grupo => {
         const idStr = String(grupo.id);
-        gruposActivos.set(idStr, { reglamento: 1, ...grupo, id: idStr });
+        gruposActivos.set(idStr, { 
+          reglamento: 1, 
+          verBienvenida: true, 
+          verRechazo: true, 
+          ...grupo, 
+          id: idStr 
+        });
         gruposAutorizados.add(idStr);
       });
       console.log("📂 gruposActivos cargados y autorizados desde JSON.");
@@ -122,7 +128,9 @@ function registrarGrupo(chatId, nombre) {
       usuariosRechazados: 0,
       fechaInicio: new Date().toISOString(),
       id: idStr,
-      reglamento: 1
+      reglamento: 1,
+      verBienvenida: true,
+      verRechazo: true
     });
     gruposAutorizados.add(idStr);
     guardarGrupos();
@@ -162,10 +170,10 @@ function autoDelete(ctx, mensaje) {
 function actualizarGrupo(chatId, procesados, rechazados) {
   const idStr = String(chatId);
   if (gruposActivos.has(idStr)) {
-    const grupo = gruposActivos.get(idStr);
-    grupo.usuariosProcesados += procesados;
-    grupo.usuariosRechazados += rechazados;
-    gruposActivos.set(idStr, grupo);
+    const group = gruposActivos.get(idStr);
+    group.usuariosProcesados += procesados;
+    group.usuariosRechazados += rechazados;
+    gruposActivos.set(idStr, group);
     guardarGrupos();
   }
 }
@@ -177,13 +185,17 @@ async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
     try {
       await ctx.telegram.declineChatJoinRequest(chatId, user.id);
       actualizarGrupo(chatId, 0, 1);
-      // CUADRE: Mensaje de rechazo adaptado a HTML con ID limpio e interactivo
-      autoDelete(ctx, {
-        text: `🚫 Usuario <b>${user.first_name}</b>${username} (ID: <a href="tg://user?id=${user.id}">${user.id}</a>) rechazado: nombre inválido o alfabeto no permitido.`,
-        options: { parse_mode: "HTML" }
-      });
+      
+      const configGrupo = gruposActivos.get(String(chatId)) || { verRechazo: true };
+      
+      if (configGrupo.verRechazo !== false) {
+        autoDelete(ctx, {
+          text: `🚫 <b>Rechazado:</b> ${user.first_name}${username} (<a href="tg://user?id=${user.id}">${user.id}</a>) | Nombre/alfabeto inválido.`,
+          options: { parse_mode: "HTML" }
+        });
+      }
     } catch (err) {
-      console.error("❌ Error al rechazar solicitud automática:", err.message);
+      console.error("❌ Error al baneo/rechazo automático o envío de log:", err.message);
     }
   } else {
     const grupo = gruposActivos.get(String(chatId)) || { reglamento: 1 };
@@ -200,7 +212,7 @@ async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
             inline_keyboard: [
               [
                 { text: "✅ Aceptar Reglamento", callback_data: `reg_ok_${chatId}` },
-                { text: "❌ Rechazar", callback_data: `reg_no_${chatId}` }
+                { text: "❌ CV", callback_data: `reg_no_${chatId}` }
               ]
             ]
           }
@@ -243,7 +255,6 @@ bot.on('chat_member', async (ctx) => {
       registrarGrupo(chatId, ctx.chat.title || "Grupo de Telegram");
       const grupo = gruposActivos.get(chatId);
 
-      // CUADRE: Notificación de activación ajustada a HTML
       ctx.reply(`⚙️ <b>¡Sistema de Control Activado!</b>\nHe tomado el control del grupo <b>${grupo.nombre}</b> con éxito. Revisando si existen solicitudes de unión pendientes...`, { parse_mode: "HTML" });
 
       try {
@@ -307,7 +318,6 @@ bot.on('callback_query', async (ctx) => {
         console.log(`ℹ️ El usuario ${userId} cerró el chat privado antes de enviar el texto de confirmación.`);
       }
 
-      // CORRECCIÓN SOLICITADA: Ícono 🆔 acoplado exclusivamente al @username
       const username = ctx.from.username ? ` 🆔 @${ctx.from.username}` : " 🆔 (sin username)";
       
       const pseudoCtx = {
@@ -316,16 +326,19 @@ bot.on('callback_query', async (ctx) => {
         deleteMessage: (msgId) => ctx.telegram.deleteMessage(targetChatId, msgId)
       };
 
-      // CORRECCIÓN SOLICITADA: Estructura HTML impecable con ID interactivo numérico activo
-      autoDelete(pseudoCtx, {
-        text: `👋 ¡Bienvenido/a <b>${ctx.from.first_name}</b>${username} (ID: <a href="tg://user?id=${userId}">${userId}</a>) al grupo <b>${grupoNombre}</b>!`,
-        options: {
-          parse_mode: "HTML",
-          reply_markup: {
-            inline_keyboard: [[{ text: "🚨 Banear", callback_data: `ban_${userId}` }]]
+      const configGrupo = gruposActivos.get(String(targetChatId)) || { verBienvenida: true };
+
+      if (configGrupo.verBienvenida !== false) {
+        autoDelete(pseudoCtx, {
+          text: `👋 ¡Bienvenido/a <b>${ctx.from.first_name}</b>${username} (<a href="tg://user?id=${userId}">${userId}</a>) a <b>${grupoNombre}</b>!`,
+          options: {
+            parse_mode: "HTML",
+            reply_markup: {
+              inline_keyboard: [[{ text: "🚨 Banear", callback_data: `ban_${userId}` }]]
+            }
           }
-        }
-      });
+        });
+      }
 
     } catch (err) {
       console.error("❌ Error crítico al procesar aprobación vía botón:", err.message);
@@ -364,12 +377,16 @@ bot.start((ctx) => {
   registrarGrupo(chatId, ctx.chat.title);
   const grupo = gruposActivos.get(chatId);
 
-  // CUADRE: Panel de inicio unificado a HTML
+  const vBienvenida = grupo.verBienvenida !== false ? "🟢 Activos" : "🔴 Ocultos";
+  const vRechazo = grupo.verRechazo !== false ? "🟢 Activos" : "🔴 Ocultos";
+
   return ctx.reply(
     `👋 Bot activo en el grupo <b>${grupo.nombre}</b>.\n\n` +
     `📊 Usuarios procesados: ${grupo.usuariosProcesados}\n` +
     `🚫 Usuarios rechazados: ${grupo.usuariosRechazados}\n` +
-    `⚙️ Reglamento actual: Reglamento ${grupo.reglamento || 1}`,
+    `⚙️ Reglamento actual: Reglamento ${grupo.reglamento || 1}\n` +
+    `👋 Log Bienvenidas: <b>${vBienvenida}</b>\n` +
+    `🚫 Log Rechazos: <b>${vRechazo}</b>`,
     { parse_mode: "HTML" }
   );
 });
@@ -402,6 +419,54 @@ bot.command('setrules', async (ctx) => {
   return ctx.reply(`⚙️ <b>Configuración Aplicada</b>\nEste grupo ahora exigirá que se apruebe el <b>Reglamento ${seleccion}</b> en el chat privado antes de permitir el ingreso.`, { parse_mode: "HTML" });
 });
 
+// NUEVO COMANDO INDEPENDIENTE: Alternar visibilidad de las bienvenidas
+bot.command('logbienvenida', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  if (ctx.chat.type === 'private') {
+    return ctx.reply("❌ Este comando solo funciona dentro de grupos.");
+  }
+
+  const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
+  if (!esAdmin) return ctx.reply("❌ Solo los administradores pueden usar este comando.");
+
+  if (!gruposActivos.has(chatId)) {
+    registrarGrupo(chatId, ctx.chat.title);
+  }
+
+  const grupo = gruposActivos.get(chatId);
+  grupo.verBienvenida = grupo.verBienvenida !== false ? false : true;
+  const estado = grupo.verBienvenida ? "🟢 VISIBLES" : "🔴 OCULTOS";
+
+  gruposActivos.set(chatId, grupo);
+  guardarGrupos();
+
+  return ctx.reply(`⚙️ Mensajes de <b>bienvenida</b> ahora están: <b>${estado}</b>`, { parse_mode: "HTML" });
+});
+
+// NUEVO COMANDO INDEPENDIENTE: Alternar visibilidad de los rechazos
+bot.command('logrechazo', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  if (ctx.chat.type === 'private') {
+    return ctx.reply("❌ Este comando solo funciona dentro de grupos.");
+  }
+
+  const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id);
+  if (!esAdmin) return ctx.reply("❌ Solo los administradores pueden usar este comando.");
+
+  if (!gruposActivos.has(chatId)) {
+    registrarGrupo(chatId, ctx.chat.title);
+  }
+
+  const grupo = gruposActivos.get(chatId);
+  grupo.verRechazo = grupo.verRechazo !== false ? false : true;
+  const estado = grupo.verRechazo ? "🟢 VISIBLES" : "🔴 OCULTOS";
+
+  gruposActivos.set(chatId, grupo);
+  guardarGrupos();
+
+  return ctx.reply(`⚙️ Mensajes de <b>rechazo</b> ahora están: <b>${estado}</b>`, { parse_mode: "HTML" });
+});
+
 bot.command('reglas', async (ctx) => {
   const chatId = String(ctx.chat.id);
 
@@ -431,21 +496,29 @@ bot.help((ctx) => {
     `• <i>Dónde:</i> Chat Privado y Grupos.\n\n` +
 
     `⚙️ <b>2. /setrules</b>\n` +
-    `• <i>Descripción:</i> Cambia el reglamento del grupo (1 o 2) que los usuarios deben firmar en privado.\n` +
+    `• <i>Descripción:</i> Cambia el reglamento del grupo (1 o 2).\n` +
     `• <i>Sintaxis:</i> <code>/setrules &lt;1 o 2&gt;</code>\n` +
-    `• <i>Quién:</i> Administradores.\n\n` +
+    `• <i>Quién:</i> Admins.\n\n` +
 
-    `📖 <b>3. /reglas</b>\n` +
-    `• <i>Descripción:</i> Muestra las reglas actuales configuradas para este grupo. Desaparece en 4 minutos.\n` +
-    `• <i>Sintaxis:</i> <code>/reglas</code>\n` +
-    `• <i>Quién:</i> Cualquier miembro.\n\n` +
+    `👁️ <b>3. /logbienvenida</b>\n` +
+    `• <i>Descripción:</i> Alterna el log de bienvenidas en el chat.\n` +
+    `• <i>Sintaxis:</i> <code>/logbienvenida</code>\n` +
+    `• <i>Quién:</i> Admins.\n\n` +
+
+    `🚫 <b>4. /logrechazo</b>\n` +
+    `• <i>Descripción:</i> Alterna el log de rechazos por nombres inválidos en el chat.\n` +
+    `• <i>Sintaxis:</i> <code>/logrechazo</code>\n` +
+    `• <i>Quién:</i> Admins.\n\n` +
+
+    `📖 <b>5. /reglas</b>\n` +
+    `• <i>Descripción:</i> Muestra las reglas actuales configuradas.\n` +
+    `• <i>Sintaxis:</i> <code>/reglas</code>\n\n` +
     
-    `🛡️ <b>4. /gban</b>\n` +
-    `• <i>Descripción:</i> Ejecuta un baneo preventivo global en la red de grupos.\n` +
-    `• <i>Sintaxis:</i> <code>/gban &lt;id_numérico&gt; [motivo]</code> o respondiendo al mensaje del infractor.\n` +
-    `• <i>Quién:</i> Administradores.\n\n` +
+    `🛡️ <b>6. /gban</b>\n` +
+    `• <i>Sintaxis:</i> <code>/gban &lt;id_numérico&gt; [motivo]</code>\n` +
+    `• <i>Quién:</i> Admins.\n\n` +
     
-    `❓ <b>5. /help</b>\n` +
+    `❓ <b>7. /help</b>\n` +
     `• <i>Sintaxis:</i> <code>/help</code>`;
 
   return ctx.reply(manualAyuda, { parse_mode: "HTML" });
@@ -485,7 +558,6 @@ bot.command('gban', async (ctx) => {
     return ctx.reply("⚠️ Uso: <code>/gban &lt;id_usuario_positivo&gt;</code> o responde al mensaje del usuario con <code>/gban [motivo]</code>.", { parse_mode: "HTML" });
   }
 
-  // Ejecución del baneo global en los chats mapeados
   for (const [chatId] of gruposActivos.entries()) {
     try {
       if (userId.startsWith("-")) continue; 
@@ -499,7 +571,6 @@ bot.command('gban', async (ctx) => {
     }
   }
 
-  // CUADRE: Notificación global del Gban adaptada al nuevo formato HTML unificado
   for (const [chatId] of gruposActivos.entries()) {
     try {
       const sent = await ctx.telegram.sendMessage(
