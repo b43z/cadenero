@@ -1,6 +1,6 @@
 // ============================================================================
 //   SISTEMA DE CONTROL — FEDERACIÓN CANCERBEROS
-//   Archivo: index.js (Versión RAM Definitiva, Corregida y Optimizada)
+//   Archivo: gemini-code-1780624552230.js (Versión RAM Definitiva y Blindada)
 // ============================================================================
 
 // --- BLOQUE 1: Imports e Inicialización ---
@@ -136,6 +136,7 @@ function autoDelete(ctx, mensaje) {
       ctx.deleteMessage(sent.message_id).catch(() => {});
       const idx = lista.indexOf(sent.message_id);
       if (idx !== -1) lista.splice(idx, 1);
+      if (lista.length === 0) mensajesActivos.delete(chatId); // Limpieza de RAM activa
     }, 240000); 
     
   }).catch(err => console.error("❌ Error en autoDelete al enviar:", err.message));
@@ -160,7 +161,6 @@ function limpiarTemporizadorSolicitud(userId, chatId) {
 }
 
 async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
-  // 🛡️ Filtro de seguridad estricto
   if (!gruposAutorizados.has(String(chatId))) return;
 
   limpiarTemporizadorSolicitud(user.id, chatId);
@@ -241,7 +241,7 @@ async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
       temporizadoresSolicitudes.set(llaveTemporizador, timer);
 
     } catch (err) {
-      console.error(`⚠️ El usuario ${user.id} tiene el privado cerrado. Ejecutando declinado preventivo:`, err.message);
+      console.error(`⚠️ El usuario ${user.id} tiene el privado cerrado o bloqueado. Ejecutando declinado preventivo.`);
       try {
         await ctx.telegram.declineChatJoinRequest(chatId, user.id);
         actualizarGrupo(chatId, 0, 1);
@@ -263,26 +263,29 @@ bot.on('chat_join_request', async (ctx) => {
   await evaluarSolicitud(ctx, ctx.chatJoinRequest.from, chatId, grupo.nombre);
 });
 
-// --- BLOQUE 4C: Manejo de permisos iniciales ---
+// --- BLOQUE 4C: Manejo de permisos iniciales (Optimizado contra Rate Limits) ---
 bot.on('chat_member', async (ctx) => {
   if (botPausado) return;
 
   const chatId = String(ctx.chat.id);
   const { old_chat_member, new_chat_member } = ctx.chatMember;
 
-  const eraAdmin = old_chat_member.status === 'administrator';
-  const esAdminAhora = new_chat_member.status === 'administrator';
+  // Solo actuar si el bot mismo es el que fue promovido a Administrador
+  if (new_chat_member.user.id === ctx.botInfo.id) {
+    const eraAdmin = old_chat_member.status === 'administrator';
+    const esAdminAhora = new_chat_member.status === 'administrator';
 
-  if (!eraAdmin && esAdminAhora) {
-    if (!new_chat_member.can_invite_users) {
-      try {
-        await ctx.telegram.sendMessage(ctx.from.id, `⚠️ En el grupo <b>${ctx.chat.title}</b> necesito que actives el permiso de *'Invitar usuarios por enlace'* antes de proceder con la activación manual.`, { parse_mode: "HTML" }).catch(() => {});
-      } catch (e) {}
+    if (!eraAdmin && esAdminAhora) {
+      if (!new_chat_member.can_invite_users) {
+        try {
+          console.log(`⚠️ Permiso faltante en ${ctx.chat.title}: Invitar usuarios por enlace.`);
+        } catch (e) {}
+      }
     }
   }
 });
 
-// --- COMANDO MANUAL: /autorizar (Silencioso y de Railway) ---
+// --- COMANDO MANUAL: /autorizar ---
 bot.command('autorizar', async (ctx) => {
   const chatId = String(ctx.chat.id);
   const messageId = ctx.message.message_id;
@@ -324,7 +327,7 @@ bot.command('autorizar', async (ctx) => {
     }
 
     try {
-      await ctx.telegram.sendMessage(ctx.from.id, `🚀 <b>¡Escudo Activado Exitosamente!</b>\nEl grupo <b>${ctx.chat.title}</b> ha sido authorized mediante firma digital y ya se encuentra protegido en la memoria RAM.`, { parse_mode: "HTML" });
+      await ctx.telegram.sendMessage(ctx.from.id, `🚀 <b>¡Escudo Activado Exitosamente!</b>\nEl grupo <b>${ctx.chat.title}</b> ha sido autorizado mediante firma digital y ya se encuentra protegido en la memoria RAM.`, { parse_mode: "HTML" });
     } catch (e) {}
   }
 });
@@ -345,16 +348,13 @@ bot.on('callback_query', async (ctx) => {
     }
 
     try {
-      // 1. Ejecutar el ban local
       await ctx.telegram.banChatMember(chatId, targetUid);
       await ctx.editMessageText("🚨 Usuario baneado por administrador. Desplegando GBAN Federado...");
 
-      // 2. Extraer metadatos de forma segura desde el objeto del mensaje del callback
       const infoUsuario = await ctx.telegram.getChat(targetUid).catch(() => ({ first_name: "Usuario", username: null }));
       const labelUser = infoUsuario.username ? `@${infoUsuario.username}` : "(sin username)";
       const origGrupo = ctx.callbackQuery.message.chat.title || "Origen Desconocido";
 
-      // Propagar a toda la federación activa en RAM
       for (const [gId] of gruposActivos.entries()) {
         try {
           await ctx.telegram.banChatMember(gId, targetUid).catch(() => {});
@@ -458,7 +458,7 @@ bot.on('callback_query', async (ctx) => {
 bot.start((ctx) => {
   const chatId = String(ctx.chat.id);
   if (ctx.chat.type === 'private') {
-    return ctx.reply("👋 Hola! Añádeme a un grupo como administrador y actívalo enviando el password.");
+    return ctx.reply("👋 ¡Hola! Añádeme a un grupo como administrador y actívalo enviando la contraseña mediante el comando /autorizar.");
   }
 
   if (!gruposAutorizados.has(chatId)) return; 
@@ -475,9 +475,31 @@ bot.start((ctx) => {
     `🚫 Usuarios rechazados: ${grupo.usuariosRechazados}\n` +
     `⚙️ Reglamento actual: Reglamento ${grupo.reglamento || 1}\n` +
     `👋 Log Bienvenidas: <b>${vBienvenida}</b>\n` +
-    `🚫 Log Rechazos: <b>${vRechazo}</b>`,
+    `🚫 Log Rechazos: <b>${vRechazo}</b>\n\n` +
+    `💡 Escribe <code>/help</code> para ver la lista de comandos disponibles.`,
     { parse_mode: "HTML" }
   );
+});
+
+// 📌 COMANDO ADICIONAL: /help (Corregido y Añadido)
+bot.command('help', async (ctx) => {
+  const ayudaTxt = 
+    `🛡️ <b>SISTEMA CANCERBEROS — MANUAL DE COMANDOS</b>\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+    `⚙️ <b>Configuración (Solo Admins del Grupo):</b>\n` +
+    `• <code>/start</code> - Estado actual, contadores y logs de este grupo.\n` +
+    `• <code>/setrules [1 o 2]</code> - Cambia el reglamento exigido al usuario.\n` +
+    `• <code>/reglas</code> - Muestra de inmediato las reglas vigentes en el chat.\n` +
+    `• <code>/logbienvenida</code> - Alterna la visibilidad de saludos públicos de entrada.\n` +
+    `• <code>/logrechazo</code> - Alterna alertas de usuarios rechazados por nombre.\n\n` +
+    `📢 <b>Comandos Globales de Federación:</b>\n` +
+    `• <code>/gmsg [Tu Mensaje]</code> - Envía un comunicado oficial a toda la red activa.\n` +
+    `• <code>/pausarbot</code> - Detiene la verificación temporal de solicitudes.\n` +
+    `• <code>/reanudarbot</code> - Reactiva el escudo y vacía solicitudes en cola.\n\n` +
+    `🔑 <b>Inicialización de Seguridad:</b>\n` +
+    `• <code>/autorizar [password]</code> - Enlaza tu grupo con el servidor RAM global.`;
+
+  return ctx.reply(ayudaTxt, { parse_mode: "HTML" });
 });
 
 bot.command('setrules', async (ctx) => {
@@ -525,7 +547,7 @@ bot.command('logrechazo', async (ctx) => {
 
   const grupo = gruposActivos.get(chatId);
   grupo.verRechazo = grupo.verRechazo !== false ? false : true;
-  const estado = grupo.verRechazo ? "🟢 VISIBLES" : "🔴 OCULTOS";
+  const estado = group.verRechazo ? "🟢 VISIBLES" : "🔴 OCULTOS";
 
   gruposActivos.set(chatId, grupo);
   return ctx.reply(`⚙️ Mensajes de <b>rechazo</b> ahora están: <b>${estado}</b>`, { parse_mode: "HTML" });
@@ -584,6 +606,7 @@ bot.command('reanudarbot', async (ctx) => {
   return ctx.reply("✅ <b>Barrido Completado:</b> Todas las solicitudes en cola han sido procesadas exitosamente.", { parse_mode: "HTML" });
 });
 
+// 🛠️ COMANDO CORREGIDO Y AFINADO: /gmsg (Filtro obsoleto removido)
 bot.command('gmsg', async (ctx) => {
   if (!gruposAutorizados.has(String(ctx.chat.id))) return;
 
@@ -608,16 +631,17 @@ bot.command('gmsg', async (ctx) => {
 
   for (const [chatId] of gruposActivos.entries()) {
     try {
-      if (chatId.startsWith("-") && !chatId.startsWith("-100")) continue; 
+      // Removida la lógica estricta de prefijos que saltaba canales o supergrupos válidos
       await ctx.telegram.sendMessage(chatId, plantillaAnuncio, { parse_mode: "HTML" });
       enviosExitosos++;
-      await new Promise(resolve => setTimeout(resolve, 200)); 
+      await new Promise(resolve => setTimeout(resolve, 250)); // Delay sutil anti-flood de Telegram
     } catch (err) {
+      console.error(`❌ Error al enviar mensaje global al chat ID ${chatId}:`, err.message);
       enviosFallidos++;
     }
   }
 
-  return ctx.reply(`✅ <b>Anuncio Global Desplegado</b>\n📊 Notificados: <b>${enviosExitosos}</b> | ❌ Errores: <b>${enviosFallidos}</b>`, { parse_mode: "HTML" });
+  return ctx.reply(`✅ <b>Anuncio Global Desplegado</b>\n📊 Notificados: <b>${enviosExitosos}</b> | ❌ Errores o inactivos: <b>${enviosFallidos}</b>`, { parse_mode: "HTML" });
 });
 
 // --- BLOQUE 10: Configuración de Webhook para Railway ---
@@ -635,5 +659,6 @@ app.listen(PORT, () => {
   console.log("🚀 Servidor escuchando en puerto " + PORT);
 });
 
-process.on('uncaughtException', (err) => console.error('❌ Error no capturado:', err));
-process.on('unhandledRejection', (reason) => console.error('❌ Promesa rechazada:', reason));
+// Gestión preventiva global de errores para evitar que caiga el contenedor en Railway
+process.on('uncaughtException', (err) => console.error('❌ Error general no capturado:', err.message));
+process.on('unhandledRejection', (reason) => console.error('❌ Promesa rechazada globalmente:', reason));
