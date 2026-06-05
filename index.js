@@ -1,6 +1,6 @@
 // ============================================================================
 //   SISTEMA DE CONTROL — FEDERACIÓN CANCERBEROS
-//   Archivo: index.js (Versión Unificada Completa - Totalmente Corregida)
+//   Archivo: index.js (Versión Unificada Completa - Totalmente Afinada)
 // ============================================================================
 
 // --- BLOQUE 1: Imports, inicialización y persistencia ---
@@ -18,10 +18,11 @@ const bot = new Telegraf(process.env.BOT_TOKEN);
 const gruposActivos = new Map();
 const gruposAutorizados = new Set();
 const mensajesActivos = new Map(); // chatId -> array de message_id
+const temporizadoresSolicitudes = new Map(); // "userId_chatId" -> setTimeout reference
 
 const FILE_GRUPOS = 'gruposActivos.json';
 
-// Textos de Reglamentos de la Comunidad en HTML para consistencia total
+// Textos de Reglamentos de la Comunidad en HTML[cite: 1]
 const REGLAMENTOS = {
   1: `💬 <b>COTORREO</b> 💬
 Este es un grupo para pláticas y desmadre. <b>NO es un espacio XXX, HOT ni de encuentros.</b>
@@ -178,7 +179,18 @@ function actualizarGrupo(chatId, procesados, rechazados) {
   }
 }
 
+function limpiarTemporizadorSolicitud(userId, chatId) {
+  const llave = `${userId}_${chatId}`;
+  if (temporizadoresSolicitudes.has(llave)) {
+    clearTimeout(temporizadoresSolicitudes.get(llave));
+    temporizadoresSolicitudes.delete(llave);
+  }
+}
+
 async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
+  // AFINACIÓN CRÍTICA: Se limpia cualquier residuo síncronamente antes de evaluar
+  limpiarTemporizadorSolicitud(user.id, chatId);
+
   const username = user.username ? ` 🆔 @${user.username}` : " 🆔 (sin username)";
 
   if (nombreInvalido(user.first_name)) {
@@ -202,20 +214,20 @@ async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
     const numReglamento = grupo.reglamento || 1;
     const textoReglamento = REGLAMENTOS[numReglamento];
 
-    // ⚡ INTERFAZ MEJORADA: Bloque de advertencia visual y estructurado
     const mensajeLlamativo = 
       `⚡ <b>¡SOLICITUD RECIBIDA CON ÉXITO!</b> ⚡\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
       `Hola <b>${user.first_name}</b>, para completar tu ingreso al grupo: \n` +
       `🛡️ <b>${grupoNombre}</b> 🛡️\n\n` +
       `⚠️ <b>REQUISITO OBLIGATORIO:</b>\n` +
-      `Debes leer el reglamento interno abajo y presionar el botón de <b>✅ Aceptar Reglamento</b>. Si cierras o ignoras este chat, tu solicitud será rechazada.\n\n` +
+      `Debes leer el reglamento interno abajo y presionar el botón de <b>✅ Aceptar Reglamento</b>.\n` +
+      `⏱️ <b>Tienes 10 minutos</b> o tu solicitud será cancelada automáticamente.\n\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
       `${textoReglamento}\n` +
       `━━━━━━━━━━━━━━━━━━━━━━━━━━`;
 
     try {
-      await ctx.telegram.sendMessage(
+      const msgEnviado = await ctx.telegram.sendMessage(
         user.id,
         mensajeLlamativo,
         {
@@ -232,6 +244,30 @@ async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
           }
         }
       );
+
+      const llaveTemporizador = `${user.id}_${chatId}`;
+      const timer = setTimeout(async () => {
+        try {
+          await ctx.telegram.declineChatJoinRequest(chatId, user.id);
+          actualizarGrupo(chatId, 0, 1);
+          temporizadoresSolicitudes.delete(llaveTemporizador);
+
+          // AFINACIÓN: Aislado con catch dedicado si el mensaje fue eliminado por el usuario
+          await ctx.telegram.editMessageText(
+            user.id,
+            msgEnviado.message_id,
+            null,
+            `⏱️ <b>Tiempo agotado:</b> Tu solicitud para unirte a <b>${grupoNombre}</b> expiró porque no respondiste en los 10 minutos establecidos. Si deseas ingresar, vuelve a solicitar el acceso.`,
+            { parse_mode: "HTML" }
+          ).catch(() => {});
+
+        } catch (timerErr) {
+          console.error(`ℹ️ Error en la expiración automática del usuario ${user.id}:`, timerErr.message);
+        }
+      }, 600000); // 10 minutos
+
+      temporizadoresSolicitudes.set(llaveTemporizador, timer);
+
     } catch (err) {
       console.error(`⚠️ El usuario ${user.id} tiene el privado cerrado. Enfoque preventivo ejecutado:`, err.message);
       try {
@@ -253,7 +289,7 @@ bot.on('chat_join_request', async (ctx) => {
   }
 
   const grupo = gruposActivos.get(chatId);
-  await evaluarSolicitud(ctx, ctx.chatJoinRequest.from, chatId, group.nombre);
+  await evaluarSolicitud(ctx, ctx.chatJoinRequest.from, chatId, grupo.nombre);
 });
 
 // --- BLOQUE 4C: Activación automática por asignación de permisos + Procesamiento en lote ---
@@ -317,6 +353,8 @@ bot.on('callback_query', async (ctx) => {
     const grupo = gruposActivos.get(String(targetChatId));
     const grupoNombre = grupo ? grupo.nombre : "el grupo";
 
+    limpiarTemporizadorSolicitud(userId, targetChatId);
+
     try {
       await ctx.telegram.approveChatJoinRequest(targetChatId, userId);
       actualizarGrupo(targetChatId, 1, 0);
@@ -334,7 +372,6 @@ bot.on('callback_query', async (ctx) => {
 
       const username = ctx.from.username ? ` 🆔 @${ctx.from.username}` : " 🆔 (sin username)";
       
-      // CORRECCIÓN: Se añade de forma explícita el objeto chat con su id para que funcione autoDelete
       const pseudoCtx = {
         chat: { id: targetChatId },
         reply: (text, options) => ctx.telegram.sendMessage(targetChatId, text, options),
@@ -364,6 +401,8 @@ bot.on('callback_query', async (ctx) => {
 
   if (data.startsWith("reg_no_")) {
     const targetChatId = data.split("_")[2];
+
+    limpiarTemporizadorSolicitud(userId, targetChatId);
 
     try {
       await ctx.telegram.declineChatJoinRequest(targetChatId, userId);
@@ -457,7 +496,6 @@ bot.command('logbienvenida', async (ctx) => {
   return ctx.reply(`⚙️ Mensajes de <b>bienvenida</b> ahora están: <b>${estado}</b>`, { parse_mode: "HTML" });
 });
 
-// COMANDO INDEPENDIENTE: Alternar visibilidad de los rechazos (CORREGIDO)
 bot.command('logrechazo', async (ctx) => {
   const chatId = String(ctx.chat.id);
   if (ctx.chat.type === 'private') {
@@ -473,8 +511,6 @@ bot.command('logrechazo', async (ctx) => {
 
   const grupo = gruposActivos.get(chatId);
   grupo.verRechazo = grupo.verRechazo !== false ? false : true;
-  
-  // CORRECCIÓN: Cambiado de "group.verRechazo" a "grupo.verRechazo" para evitar crash
   const estado = grupo.verRechazo ? "🟢 VISIBLES" : "🔴 OCULTOS";
 
   gruposActivos.set(chatId, grupo);
@@ -540,7 +576,6 @@ bot.help((ctx) => {
   return ctx.reply(manualAyuda, { parse_mode: "HTML" });
 });
 
-// 🛡️ SECCIÓN GBAN OPTIMIZADA (Sincronizada por completo a HTML y variables corregidas)
 bot.command('gban', async (ctx) => {
   if (ctx.chat.type === 'private') {
     return ctx.reply("❌ Este comando solo funciona dentro de grupos.");
@@ -604,8 +639,8 @@ bot.command('gban', async (ctx) => {
           ctx.telegram.deleteMessage(chatId, sent.message_id).catch(() => {});
         }, 240000); 
       }
-    } catch {
-      // CORRECCIÓN: Catch vacío corregido a sintaxis válida de Node.js
+    } catch (err) {
+      console.error(`❌ Error al enviar mensaje de notificación global de ban en ${chatId}:`, err.message);
     }
   }
 });
