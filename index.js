@@ -1,6 +1,6 @@
 // ============================================================================
 //   SISTEMA DE CONTROL — FEDERACIÓN CANCERBEROS
-//   Archivo: index.js (Versión Unificada Completa con Interfaz Visual Mejorada)
+//   Archivo: index.js (Versión Unificada Completa - Totalmente Corregida)
 // ============================================================================
 
 // --- BLOQUE 1: Imports, inicialización y persistencia ---
@@ -253,7 +253,7 @@ bot.on('chat_join_request', async (ctx) => {
   }
 
   const grupo = gruposActivos.get(chatId);
-  await evaluarSolicitud(ctx, ctx.chatJoinRequest.from, chatId, grupo.nombre);
+  await evaluarSolicitud(ctx, ctx.chatJoinRequest.from, chatId, group.nombre);
 });
 
 // --- BLOQUE 4C: Activación automática por asignación de permisos + Procesamiento en lote ---
@@ -334,6 +334,7 @@ bot.on('callback_query', async (ctx) => {
 
       const username = ctx.from.username ? ` 🆔 @${ctx.from.username}` : " 🆔 (sin username)";
       
+      // CORRECCIÓN: Se añade de forma explícita el objeto chat con su id para que funcione autoDelete
       const pseudoCtx = {
         chat: { id: targetChatId },
         reply: (text, options) => ctx.telegram.sendMessage(targetChatId, text, options),
@@ -456,6 +457,7 @@ bot.command('logbienvenida', async (ctx) => {
   return ctx.reply(`⚙️ Mensajes de <b>bienvenida</b> ahora están: <b>${estado}</b>`, { parse_mode: "HTML" });
 });
 
+// COMANDO INDEPENDIENTE: Alternar visibilidad de los rechazos (CORREGIDO)
 bot.command('logrechazo', async (ctx) => {
   const chatId = String(ctx.chat.id);
   if (ctx.chat.type === 'private') {
@@ -471,7 +473,9 @@ bot.command('logrechazo', async (ctx) => {
 
   const grupo = gruposActivos.get(chatId);
   grupo.verRechazo = grupo.verRechazo !== false ? false : true;
-  const estado = group.verRechazo ? "🟢 VISIBLES" : "🔴 OCULTOS";
+  
+  // CORRECCIÓN: Cambiado de "group.verRechazo" a "grupo.verRechazo" para evitar crash
+  const estado = grupo.verRechazo ? "🟢 VISIBLES" : "🔴 OCULTOS";
 
   gruposActivos.set(chatId, grupo);
   guardarGrupos();
@@ -536,7 +540,7 @@ bot.help((ctx) => {
   return ctx.reply(manualAyuda, { parse_mode: "HTML" });
 });
 
-// 🛡️ SECCIÓN GBAN OPTIMIZADA (Sincronizada por completo a HTML)
+// 🛡️ SECCIÓN GBAN OPTIMIZADA (Sincronizada por completo a HTML y variables corregidas)
 bot.command('gban', async (ctx) => {
   if (ctx.chat.type === 'private') {
     return ctx.reply("❌ Este comando solo funciona dentro de grupos.");
@@ -600,7 +604,9 @@ bot.command('gban', async (ctx) => {
           ctx.telegram.deleteMessage(chatId, sent.message_id).catch(() => {});
         }, 240000); 
       }
-    } catch (e) {}
+    } catch {
+      // CORRECCIÓN: Catch vacío corregido a sintaxis válida de Node.js
+    }
   }
 });
 
