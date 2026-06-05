@@ -473,13 +473,21 @@ bot.command('gban', async (ctx) => {
     return ctx.reply("⚠️ Uso: \`/gban <id_usuario_positivo>\` o responde al mensaje del usuario con \`/gban [motivo]\`.", { parse_mode: "Markdown" });
   }
 
-  // Ejecución del baneo global en los chats mapeados
+// Ejecución del baneo global en los chats mapeados
   for (const [chatId] of gruposActivos.entries()) {
     try {
       if (userId.startsWith("-")) continue; 
+      
+      // Intentamos aplicar el baneo
       await ctx.telegram.banChatMember(chatId, userId);
     } catch (err) {
-      console.error(`❌ Error aplicando ban global en ${chatId}:`, err.message);
+      // Si el error es específicamente por ID inválido o cuenta inexistente, lo manejamos limpiamente
+      if (err.message.includes("PARTICIPANT_ID_INVALID")) {
+        console.warn(`⚠️ Aviso: El ID ${userId} no es válido o ya no existe en el chat ${chatId}.`);
+      } else {
+        // Cualquier otro error (como falta de permisos del bot) se sigue registrando
+        console.error(`❌ Error aplicando ban global en ${chatId}:`, err.message);
+      }
     }
   }
 
