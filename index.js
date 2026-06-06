@@ -44,7 +44,7 @@ function cargarConfiguracionMaestra() {
         const idStr = String(grupo.id);
         gruposActivos.set(idStr, {
           id: idStr,
-          nombre: group.nombre || "Grupo Federación",
+          nombre: grupo.nombre || "Grupo Federación", // <-- CORREGIDO: de group.nombre a grupo.nombre
           usuariosProcesados: parseInt(grupo.usuariosProcesados) || 0, 
           usuariosRechazados: parseInt(grupo.usuariosRechazados) || 0,   
           fechaInicio: grupo.fechaInicio || new Date().toISOString(),
@@ -62,7 +62,6 @@ function cargarConfiguracionMaestra() {
     console.error("❌ PERSISTENCIA: Error al leer gruposActivos.json:", err.message);
   }
 }
-
 function guardarConfiguracionMaestra() {
   try {
     const arregloSalida = Array.from(gruposActivos.values());
