@@ -285,6 +285,7 @@ bot.on('callback_query', async (ctx) => {
           deleteMessage: (msgId) => ctx.telegram.deleteMessage(targetChatId, msgId)
         };
 
+        // ENTRADA OPTIMIZADA: Solo renderiza el nombre limpio del grupo sin prefijos estáticos
         autoDelete(pseudoCtx, {
           text: `👋 ¡Bienvenido/a <b>${ctx.from.first_name}</b>${username} (<a href="tg://user?id=${userId}">${userId}</a>) a <b>${grupoNombre}</b>!`,
           options: { parse_mode: "HTML" }
@@ -330,7 +331,8 @@ bot.start((ctx) => {
     `🛡️ Estado: <b>${botPausado ? "⏸️ PAUSADO" : "🟢 ACTIVO"}</b>\n` +
     `📊 Totales Procesados: ${grupo.usuariosProcesados} | 🚫 Rechazados: ${grupo.usuariosRechazados}\n` +
     `⚙️ Reglamento Asignado: Reglamento ${grupo.reglamento || 1}\n` +
-    `👋 Saludos: <b>ON</b> | Logs Filtrados: <b>ON</b>\n\n` +
+    `👋 Saludos de Bienvenida: <b>${grupo.verBienvenida !== false ? "ON 🟢" : "OFF 🔴"}</b>\n` +
+    `🚫 Logs de Filtros/Rechazo: <b>${grupo.verRechazo !== false ? "ON 🟢" : "OFF 🔴"}</b>\n\n` +
     `💡 Escribe <code>/help</code> para desplegar los comandos válidos.`,
     { parse_mode: "HTML" }
   );
@@ -342,10 +344,14 @@ bot.command('help', (ctx) => {
     `• <code>/start</code> - Ver estado e indicadores acumulados en RAM.\n` +
     `• <code>/reglas</code> - Despliega el reglamento asignado en este chat.\n` +
     `• <code>/setrules [1 o 2]</code> - Cambia el reglamento vigente en este grupo.\n` +
-    `• <code>/gban [ID/Respuesta] [Razón]</code> - Baneo e inhabilitación masiva con réplica multimedia.\n` +
+    `• <code>/gban [ID/Respuesta] [Razón]</code> - Baneo masivo con réplica multimedia.\n` +
     `• <code>/gmsg [Mensaje]</code> - Envía un comunicado oficial a toda la red unificada.\n` +
     `• <code>/pausarbot</code> - Suspensión global del escudo en caliente.\n` +
-    `• <code>/reanudarbot</code> - Reactivación global de defensas de la federación.`,
+    `• <code>/reanudarbot</code> - Reactivación global de defensas de la federación.\n` +
+    `• <code>/pausarbienvenida</code> - Apaga las bienvenidas en este grupo.\n` +
+    `• <code>/reanudarbienvenida</code> - Enciende las bienvenidas en este grupo.\n` +
+    `• <code>/pausarrechazo</code> - Apaga los mensajes de rechazo en este grupo.\n` +
+    `• <code>/reanudarrechazo</code> - Enciende los mensajes de rechazo en este grupo.`,
     { parse_mode: "HTML" }
   );
 });
@@ -427,11 +433,11 @@ bot.command('gban', async (ctx) => {
         if (notifReplica) ctx.telegram.deleteMessage(gId, notifReplica.message_id).catch(() => {});
       }, 240000); 
 
-      await new Promise(r => setTimeout(r, 250)); // Control anti-flood entre grupos
+      await new Promise(r => setTimeout(r, 250)); 
 
     } catch (fErr) {
       fallidos++;
-      console.error(`❌ Error en propagación hacia la subred ${gId}:`, fErr.message);
+      console.error(`❌ Error en propagation hacia la subred ${gId}:`, fErr.message);
     }
   }
 
@@ -513,6 +519,47 @@ bot.command('reanudarbot', async (ctx) => {
   if (!gruposAutorizados.has(String(ctx.chat.id)) || !(await esAdminDelGrupo(ctx, ctx.from.id))) return;
   botPausado = false;
   return ctx.reply("▶️ <b>SISTEMA REANUDADO GLOBALMENTE</b>\nEl escudo está activo. Escaneando nuevas solicitudes entrantes en tiempo real...", { parse_mode: "HTML" });
+});
+
+// Control de visualización de Logs por chat individuales
+bot.command('pausarbienvenida', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  if (!gruposAutorizados.has(chatId) || !(await esAdminDelGrupo(ctx, ctx.from.id))) return;
+  
+  const grupo = gruposActivos.get(chatId);
+  grupo.verBienvenida = false;
+  gruposActivos.set(chatId, grupo);
+  return ctx.reply("🔴 <b>Logs de Bienvenida Desactivados:</b> El bot ya no publicará tarjetas de bienvenida cuando los usuarios entren a este grupo.", { parse_mode: "HTML" });
+});
+
+bot.command('reanudarbienvenida', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  if (!gruposAutorizados.has(chatId) || !(await esAdminDelGrupo(ctx, ctx.from.id))) return;
+  
+  const grupo = gruposActivos.get(chatId);
+  grupo.verBienvenida = true;
+  gruposActivos.set(chatId, grupo);
+  return ctx.reply("🟢 <b>Logs de Bienvenida Activados:</b> El bot volverá a publicar tarjetas de bienvenida automáticas en este chat.", { parse_mode: "HTML" });
+});
+
+bot.command('pausarrechazo', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  if (!gruposAutorizados.has(chatId) || !(await esAdminDelGrupo(ctx, ctx.from.id))) return;
+  
+  const grupo = gruposActivos.get(chatId);
+  grupo.verRechazo = false;
+  gruposActivos.set(chatId, grupo);
+  return ctx.reply("🔴 <b>Logs de Filtro Desactivados:</b> El bot ocultará las notificaciones de usuarios rechazados por nombres inválidos en este chat.", { parse_mode: "HTML" });
+});
+
+bot.command('reanudarrechazo', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  if (!gruposAutorizados.has(chatId) || !(await esAdminDelGrupo(ctx, ctx.from.id))) return;
+  
+  const grupo = gruposActivos.get(chatId);
+  grupo.verRechazo = true;
+  gruposActivos.set(chatId, grupo);
+  return ctx.reply("🟢 <b>Logs de Filtro Activados:</b> El bot notificará públicamente en el chat cuando un usuario sea rechazado por nombre inválido.", { parse_mode: "HTML" });
 });
 
 // --- BLOQUE 5: Servidor Web / Configuración de Webhook ---
