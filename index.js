@@ -93,26 +93,46 @@ async function esAdminDelGrupo(ctx, userId, chatId = null) {
   }
 }
 
+/**
+ * REGLAS DE VALIDACIÓN AMPLIADAS FEDERACIÓN CANCERBEROS:
+ * - Cualquier Emoji está PERMITIDO, pero actúa como decoración (no suma longitud).
+ * - Cualquier Símbolo de Puntuación, espacio o número provoca RECHAZO INMEDIATO.
+ * - El texto base alfabético (sin emojis) debe tener al menos 3 caracteres latinos.
+ * - Evita repeticiones puras tipo anti-spam (ej: "aaa").
+ */
 function nombreInvalido(nombre) {
   if (!nombre) return true;
-  const prohibidos = ["http", "https", "www", ".com", ".net", ".org"];
-  const limpio = nombre.trim();
-  const sinEspacios = limpio.replace(/\s+/g, '');
+  const original = nombre.trim();
 
-  if (prohibidos.some(p => limpio.toLowerCase().includes(p))) return true;
-  
-  const soloTexto = limpio.replace(/[\d\s\p{P}\p{S}\p{Emoji}]/gu, '');
+  // 1. FILTRO DE SPAM/URLS (Previene enlaces básicos)
+  const prohibidos = ["http", "https", "www", ".com", ".net", ".org"];
+  if (prohibidos.some(p => original.toLowerCase().includes(p))) return true;
+
+  // 2. RECHAZO INMEDIATO DE SÍMBOLOS, ESPACIOS Y NÚMEROS
+  // Bloquea cualquier cosa que sea puntuación (\p{P}), símbolo matemático/moneda (\p{S}), espacios (\s) o dígitos (\d)
+  if (/[\p{P}\p{S}\s\d]/gu.test(original)) return true;
+
+  // 3. AISLAMIENTO DE EMOJIS
+  // Quitamos todos los caracteres de tipo Emoji (\p{Emoji}) para quedarnos solo con el texto base
+  const soloTexto = original.replace(/\p{Emoji}/gu, '');
+
+  // 4. VALIDACIÓN DE TEXTO BASE
+  // Debe medir al menos 3 caracteres alfabéticos auténticos
   if (soloTexto.length < 3) return true;
-  
+
+  // Debe pertenecer estrictamente al alfabeto latino (letras a-z, acentos, ñ)
   const regexLatina = /^[\p{Script=Latin}]+$/u;
   if (!regexLatina.test(soloTexto)) return true;
-  if (/^\d+$/.test(sinEspacios)) return true;
-  if (/(.)\1{2,}/.test(sinEspacios)) return true; 
 
+  // REGLA ANTI-SPAM: No se permite repetir la misma letra de forma consecutiva 3 o más veces (ej: "aaa")
+  if (/(.)\1{2,}/i.test(soloTexto)) return true;
+
+  // REGLA MINIMA DE VOCALES (Para nombres extremadamente cortos de 3 a 4 letras sin sentido fonético)
   if (soloTexto.length <= 4) {
     if (!/[aeiouáéíóúüy]/i.test(soloTexto)) return true;
   }
-  return false;
+
+  return false; // El nombre es completamente válido
 }
 
 function autoDelete(ctx, mensaje) {
@@ -286,7 +306,7 @@ bot.on('callback_query', async (ctx) => {
         return ctx.answerCbQuery("❌ Operación denegada. Solo administradores.", { show_alert: true });
       }
 
-      await ctx.answerCbQuery("💀 Ejecutando baneo federado...", { show_alert: false });
+      await ctx.answerCbQuery("💀 Ejecutando baneo federación...", { show_alert: false });
       
       try {
         let infoUsuario;
@@ -299,11 +319,11 @@ bot.on('callback_query', async (ctx) => {
             baneadosExito++;
             
             const notifReporte = await ctx.telegram.sendMessage(gId, 
-              `🛡️ <b>GBAN — Federación Cancerberos</b>\n` +
+              `🛡️ <b>GBAN — Federación CANCERBEROS</b>\n` +
               `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
               `🆔 <b>ID Penalizado:</b> <a href="tg://user?id=${targetUserId}">${targetUserId}</a>\n` +
               `👤 <b>Nombre:</b> ${infoUsuario.first_name}\n` +
-              `⚖️ <b>Razón:</b> Baneado y rechazado desde Bienvenida.\n` +
+              `⚖️ <b>Razón:</b> Baneado y/o Rechazo por actividad sospechosa al ingreso.\n` +
               `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
               `⚠️ <i>Esta alerta se auto-eliminará en 4 minutos.</i>`,
               { parse_mode: "HTML" }
@@ -315,7 +335,7 @@ bot.on('callback_query', async (ctx) => {
         
         await ctx.deleteMessage(messageId).catch(() => {});
         
-        ctx.reply(`✅ <b>Usuario expulsado y baneado federadamente</b> en ${baneadosExito} grupos.`)
+        ctx.reply(`✅ <b>Usuario expulsado y baneo de federación</b> en ${baneadosExito} grupos.`)
           .then(m => setTimeout(() => ctx.deleteMessage(m.message_id).catch(() => {}), 6000));
       } catch (banErr) {
         console.error("❌ Error al banear desde botón de rechazo:", banErr.message);
@@ -349,7 +369,6 @@ bot.on('callback_query', async (ctx) => {
             deleteMessage: (msgId) => ctx.telegram.deleteMessage(targetChatId, msgId)
           };
 
-          // CAMBIO: El botón ahora muestra las calaveras con el texto RECHAZAR
           autoDelete(pseudoCtx, {
             text: `👋 ¡Bienvenido/a <b>${ctx.from.first_name}</b>${username} (<a href="tg://user?id=${userId}">${userId}</a>) a <b>${grupoNombre}</b>!`,
             options: { 
@@ -471,7 +490,7 @@ bot.command('gban', async (ctx) => {
 
   const labelUser = infoUsuario.username ? `@${infoUsuario.username}` : "(sin username)";
   const origGrupo = ctx.chat.title || "Origen Desconocido";
-  const avisoInicial = await ctx.reply(`🚨 <b>Procesando GBAN Federado y Replicación...</b>`, { parse_mode: "HTML" });
+  const avisoInicial = await ctx.reply(`🚨 <b>Procesando GBAN de Federación...</b>`, { parse_mode: "HTML" });
 
   let baneadosExito = 0;
   let fallidos = 0;
@@ -483,7 +502,7 @@ bot.command('gban', async (ctx) => {
 
       const notifReporte = await ctx.telegram.sendMessage(
         gId,
-        `🛡️ <b>GBAN — Federación Cancerberos</b>\n` +
+        `🛡️ <b>GBAN — Federación CANCERBEROS</b>\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
         `🆔 <b>ID Penalizado:</b> <a href="tg://user?id=${targetUid}">${targetUid}</a>\n` +
         `👤 <b>Nombre:</b> ${infoUsuario.first_name}\n` +
