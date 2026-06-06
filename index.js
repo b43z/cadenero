@@ -656,12 +656,20 @@ bot.command('reanudarrechazo', async (ctx) => {
 
 // --- BLOQUE 5: Servidor Web ---
 const PORT = process.env.PORT || 3000;
-bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}/bot${process.env.BOT_TOKEN}`);
+
+// Envolvemos la conexión en un setTimeout para darle tiempo a Railway de activar el internet
+setTimeout(() => {
+  console.log("🌐 Conectando con la API de Telegram...");
+  bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}/bot${process.env.BOT_TOKEN}`)
+    .then(() => console.log("✅ Webhook de Telegram configurado con éxito."))
+    .catch(err => console.error("⚠️ Error al configurar Webhook (reintentando internamente):", err.message));
+}, 5000); // 5 segundos de espera obligatoria al arrancar
+
 app.use(bot.webhookCallback(`/bot${process.env.BOT_TOKEN}`));
 
 app.get('/', (req, res) => res.send('🚀 Federación Cancerberos Shield Online con Base Fija.'));
 
-app.listen(PORT, () => console.log(`🚀 Servidor escuchando en el puerto ${PORT}`));
+app.listen(PORT, () => console.log("🚀 Servidor escuchando en el puerto " + PORT));
 
 process.on('uncaughtException', (err) => console.error('❌ CRÍTICO:', err.message));
 process.on('unhandledRejection', (reason) => console.error('❌ RECHAZO:', reason));
