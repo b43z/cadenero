@@ -416,7 +416,6 @@ bot.command('gban', async (ctx) => {
         `🏷️ <b>Username:</b> ${labelUser}\n` +
         `📍 <b>Origen:</b> ${origGrupo}\n` +
         `⚖️ <b>Razón:</b> ${razon}\n` +
-        `👤 <b>Ejecutado por:</b> ${ctx.from.first_name}\n\n` +
         `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
         (mensajeAReplicarId ? `👇 <i>Abajo se adjunta la réplica de la infracción cometida.</i>\n` : '') +
         `⚠️ <i>Esta alerta se auto-eliminará en 4 minutos.</i>`,
@@ -483,7 +482,7 @@ bot.command('gmsg', async (ctx) => {
   const mensajeGlobal = ctx.message.text.split(" ").slice(1).join(" ").trim();
   if (!mensajeGlobal) return ctx.reply("⚠️ Formato incorrecto. Usa: <code>/gmsg [Tu comunicado aquí]</code>", { parse_mode: "HTML" });
 
-  const plantilla = `📢 <b>COMUNICADO OFICIAL — FEDERACIÓN CANCERBEROS</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n${mensajeGlobal}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n👤 <i>Emitido por: ${ctx.from.first_name}</i>`;
+  const plantilla = `📢 <b>COMUNICADO OFICIAL — FEDERACIÓN CANCERBEROS</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n${mensajeGlobal}\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
   let ok = 0, errs = 0;
 
   for (const [chatId] of gruposActivos.entries()) {
