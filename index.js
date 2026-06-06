@@ -44,7 +44,7 @@ function cargarConfiguracionMaestra() {
         const idStr = String(grupo.id);
         gruposActivos.set(idStr, {
           id: idStr,
-          nombre: grupo.nombre || "Grupo Federación", // <-- CORREGIDO: de group.nombre a grupo.nombre
+          nombre: grupo.nombre || "Grupo Federación",
           usuariosProcesados: parseInt(grupo.usuariosProcesados) || 0, 
           usuariosRechazados: parseInt(grupo.usuariosRechazados) || 0,   
           fechaInicio: grupo.fechaInicio || new Date().toISOString(),
@@ -62,6 +62,7 @@ function cargarConfiguracionMaestra() {
     console.error("❌ PERSISTENCIA: Error al leer gruposActivos.json:", err.message);
   }
 }
+
 function guardarConfiguracionMaestra() {
   try {
     const arregloSalida = Array.from(gruposActivos.values());
@@ -274,6 +275,54 @@ bot.on('callback_query', async (ctx) => {
     const userId = ctx.from.id;
     const messageId = ctx.callbackQuery.message.message_id;
 
+    // INTERCEPTOR PARA EL BOTÓN DE RECHAZAR DE LA BIENVENIDA
+    if (data.startsWith("bienvenida_ban_")) {
+      const targetUserId = data.split("_")[2];
+      const targetChatId = String(ctx.chat.id);
+
+      // Validar si el que presionó el botón es Admin
+      const esAdmin = await esAdminDelGrupo(ctx, userId, targetChatId);
+      if (!esAdmin) {
+        return ctx.answerCbQuery("❌ Operación denegada. Solo administradores.", { show_alert: true });
+      }
+
+      await ctx.answerCbQuery("💀 Ejecutando baneo federado...", { show_alert: false });
+      
+      try {
+        let infoUsuario;
+        try { infoUsuario = await ctx.telegram.getChat(targetUserId); } catch { infoUsuario = { first_name: "Usuario", username: null }; }
+
+        let baneadosExito = 0;
+        for (const [gId] of gruposActivos.entries()) {
+          try {
+            await ctx.telegram.banChatMember(gId, targetUserId);
+            baneadosExito++;
+            
+            const notifReporte = await ctx.telegram.sendMessage(gId, 
+              `🛡️ <b>GBAN — Federación Cancerberos</b>\n` +
+              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+              `🆔 <b>ID Penalizado:</b> <a href="tg://user?id=${targetUserId}">${targetUserId}</a>\n` +
+              `👤 <b>Nombre:</b> ${infoUsuario.first_name}\n` +
+              `⚖️ <b>Razón:</b> Baneado y rechazado desde Bienvenida.\n` +
+              `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+              `⚠️ <i>Esta alerta se auto-eliminará en 4 minutos.</i>`,
+              { parse_mode: "HTML" }
+            ).catch(() => {});
+
+            setTimeout(() => { if (notifReporte) ctx.telegram.deleteMessage(gId, notifReporte.message_id).catch(() => {}); }, 240000);
+          } catch {}
+        }
+        
+        await ctx.deleteMessage(messageId).catch(() => {});
+        
+        ctx.reply(`✅ <b>Usuario expulsado y baneado federadamente</b> en ${baneadosExito} grupos.`)
+          .then(m => setTimeout(() => ctx.deleteMessage(m.message_id).catch(() => {}), 6000));
+      } catch (banErr) {
+        console.error("❌ Error al banear desde botón de rechazo:", banErr.message);
+      }
+      return;
+    }
+
     if (data.startsWith("reg_ok_")) {
       const targetChatId = String(data.split("_")[2]);
       const grupo = gruposActivos.get(targetChatId);
@@ -300,9 +349,17 @@ bot.on('callback_query', async (ctx) => {
             deleteMessage: (msgId) => ctx.telegram.deleteMessage(targetChatId, msgId)
           };
 
+          // CAMBIO: El botón ahora muestra las calaveras con el texto RECHAZAR
           autoDelete(pseudoCtx, {
             text: `👋 ¡Bienvenido/a <b>${ctx.from.first_name}</b>${username} (<a href="tg://user?id=${userId}">${userId}</a>) a <b>${grupoNombre}</b>!`,
-            options: { parse_mode: "HTML" }
+            options: { 
+              parse_mode: "HTML",
+              reply_markup: {
+                inline_keyboard: [
+                  [{ text: "💀 RECHAZAR 💀", callback_data: `bienvenida_ban_${userId}` }]
+                ]
+              }
+            }
           });
         }
       } catch (err) {
