@@ -738,19 +738,12 @@ bot.command('reanudarbot', async (ctx) => {
   // Reactivación del escudo
   botPausado = false;
   
-  // Mensaje de confirmación
+  // Mensaje de confirmación único
   return ctx.reply(
     `▶️ <b>SISTEMA REANUDADO CON ÉXITO</b>\n` +
     `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
     `🛡️ El escudo protector ha sido reactivado en: <b>${nombreGrupo}</b>.\n\n` +
-    `📥 <i>Nota: Telegram enviará las solicitudes pendientes de forma automática a través del flujo en tiempo real. No es necesario realizar escaneos manuales.</i>`, 
-    { parse_mode: "HTML" }
-  );
-});
-
-  return ctx.reply(
-    `✅ <b>Reactivación Exitosa</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-    `📥 Se encontraron y procesaron <b>${totalProcesadas}</b> solicitudes que estaban en espera en este grupo.`, 
+    `📥 <i>Nota: Telegram enviará las solicitudes pendientes de forma automática a través del flujo en tiempo real.</i>`, 
     { parse_mode: "HTML" }
   );
 });
