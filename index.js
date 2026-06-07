@@ -729,30 +729,24 @@ bot.command('pausarbot', async (ctx) => {
 
 bot.command('reanudarbot', async (ctx) => {
   const chatId = String(ctx.chat.id);
+  // Verificación de permisos
   if (!gruposAutorizados.has(chatId) || !(await esAdminDelGrupo(ctx, ctx.from.id, chatId))) return;
   
   const grupoActual = gruposActivos.get(chatId);
   const nombreGrupo = grupoActual ? grupoActual.nombre : (ctx.chat.title || "Este grupo");
 
+  // Reactivación del escudo
   botPausado = false;
-  await ctx.reply(`▶️ <b>SISTEMA REANUDADO</b>\n🔍 <i>Buscando solicitudes pendientes exclusivamente en: <b>${nombreGrupo}</b>...</i>`, { parse_mode: "HTML" });
-
-  let totalProcesadas = 0;
-
-  try {
-    const solicitudes = await ctx.telegram.getChatJoinRequests(chatId);
-
-    if (solicitudes && solicitudes.join_requests.length > 0) {
-      for (const req of solicitudes.join_requests) {
-        await evaluarSolicitud(ctx, req.from, chatId, nombreGrupo);
-        totalProcesadas++;
-        await new Promise(r => setTimeout(r, 250));
-      }
-    }
-  } catch (err) {
-    console.error(`❌ Error al escanear peticiones en el grupo ${chatId}:`, err.message);
-    return ctx.reply("⚠️ <b>Error de Conexión:</b> No se pudieron recuperar las solicitudes pendientes desde los servidores de Telegram.", { parse_mode: "HTML" });
-  }
+  
+  // Mensaje de confirmación
+  return ctx.reply(
+    `▶️ <b>SISTEMA REANUDADO CON ÉXITO</b>\n` +
+    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+    `🛡️ El escudo protector ha sido reactivado en: <b>${nombreGrupo}</b>.\n\n` +
+    `📥 <i>Nota: Telegram enviará las solicitudes pendientes de forma automática a través del flujo en tiempo real. No es necesario realizar escaneos manuales.</i>`, 
+    { parse_mode: "HTML" }
+  );
+});
 
   return ctx.reply(
     `✅ <b>Reactivación Exitosa</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
