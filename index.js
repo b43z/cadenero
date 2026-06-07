@@ -668,7 +668,10 @@ bot.command('gmsg', async (ctx) => {
   const mensajeGlobal = ctx.message.text.split(" ").slice(1).join(" ").trim();
   if (!mensajeGlobal) return ctx.reply("⚠️ Usa: <code>/gmsg [Mensaje]</code>", { parse_mode: "HTML" });
 
-  const plantilla = `📢 <b>COMUNICADO OFICIAL 📢 FEDERACIÓN CANCERBEROS</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n${mensajeGlobal}\n`;
+  // Estética ajustada con subrayado de línea única y compacta
+  const plantilla = `📢 <b>COMUNICADO OFICIAL 📢 FEDERACIÓN CANCERBEROS</b>\n` +
+                    `──────────────────────────────────────────────\n\n` +
+                    `${mensajeGlobal}\n`;
   let ok = 0;
 
   for (const [gId] of gruposActivos.entries()) {
