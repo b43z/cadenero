@@ -356,7 +356,7 @@ bot.on('callback_query', async (ctx) => {
               `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
               `🆔 <b>ID Penalizado:</b> <a href="tg://user?id=${targetUserId}">${targetUserId}</a>\n` +
               `👤 <b>Nombre:</b> ${infoUsuario.first_name}\n` +
-              `⚖️ <b>Razón:</b> Baneado y/o Rechazo por actividad sospechosa al ingreso.\n` +
+              `⚖️ <b>Razón:</b> Baneado y/o Rechazo por actividad sospechosa.\n` +
               `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
               `⚠️ <i>Esta alerta se auto-eliminará en 4 minutos.</i>`,
               { parse_mode: "HTML" }
@@ -473,7 +473,7 @@ bot.command('help', (ctx) => {
     `• <code>/gban [ID/Respuesta] [Razón]</code> - Baneo masivo con réplica multimedia.\n` +
     `• <code>/gmsg [Mensaje]</code> - Envía un comunicado oficial a toda la red unificada.\n` +
     `• <code>/pausarbot</code> - Suspensión global del escudo en caliente.\n` +
-    `• <code>/reanudarbot</code> - Reactivación global de defensas de la federación.\n` +
+    `• <code>/reanudarbot</code> - Reactivación local de defensas y evaluación de pendientes.\n` +
     `• <code>/pausarbienvenida</code> - Apaga las bienvenidas en este grupo.\n` +
     `• <code>/reanudarbienvenida</code> - Enciende las bienvenidas en este grupo.\n` +
     `• <code>/pausarrechazo</code> - Apaga los mensajes de rechazo en este grupo.\n` +
@@ -568,8 +568,8 @@ bot.command('gban', async (ctx) => {
       avisoInicial.message_id,
       null,
       `✅ <b>GBAN COMPLETADO</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-      `🛡️ <b>Grupos Limpiados:</b> ${baneadosExito}\n` +
-      `❌ <b>Errores/No Aplicó:</b> ${fallidos}`,
+      `🛡️ <b>Grupos Limpiados:</b> ${baneadosExito}\n\n` +
+      `❌ <b>Errores/Grupos sin Aplicar:</b> ${fallidos}`,
       { parse_mode: "HTML" }
     );
   } catch (err) {
@@ -585,7 +585,7 @@ bot.command('setrules', async (ctx) => {
   const args = ctx.message.text.split(" ").slice(1).join(" ").trim();
   const numReglamento = parseInt(args);
 
-  if (!REGLAMENTOS[numReglamento]) {
+  if (!REGLAMENTES[numReglamento]) { // Nota: Mantén tu objeto REGLAMENTOS tal como está arriba
     return ctx.reply("⚠️ Usa: <code>/setrules 1</code> o <code>/setrules 2</code>", { parse_mode: "HTML" });
   }
 
@@ -605,7 +605,7 @@ bot.command('gmsg', async (ctx) => {
   const mensajeGlobal = ctx.message.text.split(" ").slice(1).join(" ").trim();
   if (!mensajeGlobal) return ctx.reply("⚠️ Usa: <code>/gmsg [Mensaje]</code>", { parse_mode: "HTML" });
 
-  const plantilla = `📢 <b>COMUNICADO OFICIAL — FEDERACIÓN CANCERBEROS</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n${mensajeGlobal}\n`;
+  const plantilla = `📢 <b>COMUNICADO OFICIAL 📢 FEDERACIÓN CANCERBEROS</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n${mensajeGlobal}\n`;
   let ok = 0;
 
   for (const [gId] of gruposActivos.entries()) {
@@ -636,11 +636,43 @@ bot.command('pausarbot', async (ctx) => {
   return ctx.reply("⏸️ <b>SISTEMA EN PAUSA GLOBAL</b>", { parse_mode: "HTML" });
 });
 
+// === COMANDO MODIFICADO CON ESCANER LOCAL ===
 bot.command('reanudarbot', async (ctx) => {
   const chatId = String(ctx.chat.id);
+  
   if (!gruposAutorizados.has(chatId) || !(await esAdminDelGrupo(ctx, ctx.from.id, chatId))) return;
+  
+  const grupoActual = gruposActivos.get(chatId);
+  const nombreGrupo = grupoActual ? grupoActual.nombre : (ctx.chat.title || "Este grupo");
+
   botPausado = false;
-  return ctx.reply("▶️ <b>SISTEMA REANUDADO GLOBALMENTE</b>", { parse_mode: "HTML" });
+  await ctx.reply(`▶️ <b>SISTEMA REANUDADO</b>\n🔍 <i>Buscando solicitudes pendientes exclusivamente en: <b>${nombreGrupo}</b>...</i>`, { parse_mode: "HTML" });
+
+  let totalProcesadas = 0;
+
+  try {
+    const solicitudes = await ctx.telegram.getChatJoinRequests(chatId);
+
+    if (solicitudes && solicitudes.join_requests.length > 0) {
+      console.log(`🔍 Escaneando: ${solicitudes.join_requests.length} solicitudes pendientes en ${nombreGrupo}`);
+      
+      for (const req of solicitudes.join_requests) {
+        await evaluarSolicitud(ctx, req.from, chatId, nombreGrupo);
+        totalProcesadas++;
+        
+        await new Promise(r => setTimeout(r, 250));
+      }
+    }
+  } catch (err) {
+    console.error(`❌ Error al escanear peticiones en el grupo ${chatId}:`, err.message);
+    return ctx.reply("⚠️ <b>Error de Conexión:</b> No se pudieron recuperar las solicitudes pendientes desde los servidores de Telegram.", { parse_mode: "HTML" });
+  }
+
+  return ctx.reply(
+    `✅ <b>Reactivación Exitosa</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+    `📥 Se encontraron y procesaron <b>${totalProcesadas}</b> solicitudes que estaban en espera en este grupo.`, 
+    { parse_mode: "HTML" }
+  );
 });
 
 bot.command('pausarbienvenida', async (ctx) => {
@@ -651,7 +683,7 @@ bot.command('pausarbienvenida', async (ctx) => {
   grupo.verBienvenida = false;
   gruposActivos.set(chatId, grupo);
   guardarConfiguracionMaestra();
-  return ctx.reply("🔴 <b>Bienvedidas Apagadas y Persistidas.</b>", { parse_mode: "HTML" });
+  return ctx.reply("🔴 <b>Bienvedidas Ocultas.</b>", { parse_mode: "HTML" });
 });
 
 bot.command('reanudarbienvenida', async (ctx) => {
@@ -662,7 +694,7 @@ bot.command('reanudarbienvenida', async (ctx) => {
   grupo.verBienvenida = true;
   gruposActivos.set(chatId, grupo);
   guardarConfiguracionMaestra();
-  return ctx.reply("🟢 <b>Bienvenidas Activadas y Persistidas.</b>", { parse_mode: "HTML" });
+  return ctx.reply("🟢 <b>Bienvenidas Activadas.</b>", { parse_mode: "HTML" });
 });
 
 bot.command('pausarrechazo', async (ctx) => {
@@ -673,7 +705,7 @@ bot.command('pausarrechazo', async (ctx) => {
   grupo.verRechazo = false;
   gruposActivos.set(chatId, grupo);
   guardarConfiguracionMaestra();
-  return ctx.reply("🔴 <b>Logs de Rechazo Ocultados y Persistidos.</b>", { parse_mode: "HTML" });
+  return ctx.reply("🔴 <b>Logs de Rechazo Ocultos.</b>", { parse_mode: "HTML" });
 });
 
 bot.command('reanudarrechazo', async (ctx) => {
@@ -684,7 +716,7 @@ bot.command('reanudarrechazo', async (ctx) => {
   grupo.verRechazo = true;
   gruposActivos.set(chatId, grupo);
   guardarConfiguracionMaestra();
-  return ctx.reply("🟢 <b>Logs de Rechazo Mostrados y Persistidos.</b>", { parse_mode: "HTML" });
+  return ctx.reply("🟢 <b>Logs de Rechazo Activos.</b>", { parse_mode: "HTML" });
 });
 
 // --- BLOQUE 5: Servidor Web ---
