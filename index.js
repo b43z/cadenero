@@ -1,3 +1,4 @@
+
 // ============================================================================
 //   SISTEMA DE CONTROL PRO — MONITOR CENTRAL DE SEGURIDAD
 //   Archivo: index.js (Arquitectura de Producción con Persistencia Fija)
@@ -311,45 +312,62 @@ async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
   }
 }
 
-// 2. NUEVOS MIEMBROS (Invitaciones directas)
 bot.on('new_chat_members', async (ctx) => {
   if (botPausado) return;
   const chatId = ctx.chat.id;
-  const nombreGrupo = ctx.chat.title;
-  
+  const nombreGrupo = ctx.chat.title || "este grupo";
+  const idStr = String(chatId);
+
+  // Verificación de que el grupo esté autorizado
+  if (!gruposAutorizados.has(idStr)) return;
+
   for (const member of ctx.message.new_chat_members) {
     if (member.id === ctx.botInfo.id) continue;
     
+    // 1. Aplicar el mute preventivo de inmediato
+    await aplicarMutePreventivo(ctx, chatId, member.id, nombreGrupo);
+    
+    // 2. Crear mención segura mediante HTML (tg://user)
+    const mention = `<a href="tg://user?id=${member.id}">${member.first_name}</a>`;
+    
+    // 3. Validar el nombre del usuario
     if (nombreInvalido(member.first_name)) {
       await ejecutarKickLocal(ctx, chatId, member.id, member.first_name, "Nombre no válido.");
-    } else {
-      await aplicarMutePreventivo(ctx, chatId, member.id, nombreGrupo);
-      
-      const configGrupo = gruposActivos.get(chatId) || { verBienvenida: true };
+      continue;
+    }
+
+    // 4. Enviar mensaje de bienvenida con mención y botón de reglas
+    try {
+      const configGrupo = gruposActivos.get(idStr) || { verBienvenida: true };
       if (configGrupo.verBienvenida !== false) {
         
-        await ctx.reply(
-          `👋 <b>¡Bienvenido, ${member.first_name}!</b>\n\n` +
-          `⚠️ <b>Estás en modo lectura.</b>\n` +
-          `Para participar, debes aceptar las reglas.`, 
+        await ctx.telegram.sendMessage(chatId, 
+          `👋 Bienvenido ${mention} a <b>${nombreGrupo}</b>.\n\n` +
+          `⚠️ <b>ESTÁS EN MODO LECTURA.</b>\n` +
+          `Para participar, debes aceptar las reglas presionando el botón de abajo.`, 
           { 
             parse_mode: "HTML",
             reply_markup: { 
-              inline_keyboard: [[{ text: "📖 ACEPTAR REGLAS", callback_data: `start_reg_${chatId}` }]] 
+              inline_keyboard: [[{ text: "📖 LEER REGLAS Y ACEPTAR", callback_data: `start_reg_${idStr}` }]] 
             }
           }
         );
 
-        const llaveKick = `${member.id}_${chatId}_kick`;
-        temporizadoresSolicitudes.set(llaveKick, setTimeout(async () => {
+        // 5. Iniciar timer de seguridad (10 minutos para aceptar o ser expulsado)
+        const llaveKick = `${member.id}_${idStr}_kick`;
+        const timer = setTimeout(async () => {
           try {
             const m = await ctx.telegram.getChatMember(chatId, member.id);
             if (m.permissions && m.permissions.can_send_messages === false) {
               await ejecutarKickLocal(ctx, chatId, member.id, member.first_name, "Tiempo agotado.");
             }
           } catch (e) { console.error("Error en timer de seguridad:", e.message); }
-        }, 600000)); // 10 minutos
+        }, 600000); 
+        
+        temporizadoresSolicitudes.set(llaveKick, timer);
       }
+    } catch (err) {
+      console.error(`❌ Error al enviar bienvenida a ${member.first_name}:`, err.message);
     }
   }
 });
