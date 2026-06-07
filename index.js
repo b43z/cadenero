@@ -712,10 +712,13 @@ bot.command('reanudarbot', async (ctx) => {
   let totalProcesadas = 0;
 
   try {
-    const solicitudes = await ctx.telegram.getChatJoinRequests(chatId);
+    // LLAMADA CORREGIDA USANDO callApi PARA EL MÉTODO getChatJoinRequests
+    const resultado = await ctx.telegram.callApi('getChatJoinRequests', {
+      chat_id: chatId
+    });
 
-    if (solicitudes && solicitudes.join_requests.length > 0) {
-      for (const req of solicitudes.join_requests) {
+    if (resultado && resultado.requests && resultado.requests.length > 0) {
+      for (const req of resultado.requests) {
         await evaluarSolicitud(ctx, req.from, chatId, nombreGrupo);
         totalProcesadas++;
         await new Promise(r => setTimeout(r, 250));
@@ -723,7 +726,7 @@ bot.command('reanudarbot', async (ctx) => {
     }
   } catch (err) {
     console.error(`❌ Error al escanear peticiones en el grupo ${chatId}:`, err.message);
-    return ctx.reply("⚠️ <b>Error de Conexión:</b> No se pudieron recuperar las solicitudes pendientes desde los servidores de Telegram.", { parse_mode: "HTML" });
+    return ctx.reply("⚠️ <b>Error de Conexión:</b> No se pudieron recuperar las solicitudes pendientes desde los servidores de Telegram. Asegúrate de que el bot sea administrador.", { parse_mode: "HTML" });
   }
 
   return ctx.reply(
