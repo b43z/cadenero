@@ -707,12 +707,20 @@ bot.command('reanudarbot', async (ctx) => {
   const nombreGrupo = grupoActual ? grupoActual.nombre : (ctx.chat.title || "Este grupo");
 
   botPausado = false;
-  await ctx.reply(`▶️ <b>SISTEMA REANUDADO</b>\n🔍 <i>Buscando solicitudes pendientes exclusivamente en: <b>${nombreGrupo}</b>...</i>`, { parse_mode: "HTML" });
+  await ctx.reply(`▶️ <b>SISTEMA REANUDADO</b>\n🔍 <i>Verificando estado del grupo: <b>${nombreGrupo}</b>...</i>`, { parse_mode: "HTML" });
 
   let totalProcesadas = 0;
 
   try {
-    // LLAMADA CORREGIDA USANDO callApi PARA EL MÉTODO getChatJoinRequests
+    // Intentamos obtener el chat para ver si tiene configurada la aprobación
+    const chatInfo = await ctx.telegram.getChat(chatId);
+    
+    // Si el grupo NO tiene activada la opción join_by_request, evitamos la consulta
+    if (!chatInfo.join_by_request) {
+      return ctx.reply("✅ <b>Sistema Reanudado.</b>\n\n💡 <i>Nota: El grupo no tiene activada la 'Aprobación de miembros'. El bot está operando correctamente en modo contingencia (filtros activos para nuevos miembros).</i>", { parse_mode: "HTML" });
+    }
+
+    // Si tiene la opción activa, procedemos a buscar solicitudes
     const resultado = await ctx.telegram.callApi('getChatJoinRequests', {
       chat_id: chatId
     });
@@ -725,15 +733,13 @@ bot.command('reanudarbot', async (ctx) => {
       }
     }
   } catch (err) {
-    console.error(`❌ Error al escanear peticiones en el grupo ${chatId}:`, err.message);
-    return ctx.reply("⚠️ <b>Error de Conexión:</b> No se pudieron recuperar las solicitudes pendientes desde los servidores de Telegram. Asegúrate de que el bot sea administrador.", { parse_mode: "HTML" });
+    console.error(`❌ Error en reanudarbot para ${chatId}:`, err.message);
+    return ctx.reply("⚠️ <b>Estado:</b> Sistema activo. (No se pudieron listar solicitudes, verifica permisos).", { parse_mode: "HTML" });
   }
 
-  return ctx.reply(
-    `✅ <b>Reactivación Exitosa</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
-    `📥 Se encontraron y procesaron <b>${totalProcesadas}</b> solicitudes que estaban en espera en este grupo.`, 
-    { parse_mode: "HTML" }
-  );
+  if (totalProcesadas > 0) {
+    return ctx.reply(`✅ <b>Procesamiento Finalizado:</b> Se encontraron y procesaron <b>${totalProcesadas}</b> solicitudes pendientes.`, { parse_mode: "HTML" });
+  }
 });
 
 bot.command('pausarbienvenida', async (ctx) => {
