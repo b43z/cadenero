@@ -65,7 +65,7 @@ function nombreInvalido(nombre) {
   const prohibidos = ["http", "https", "www", ".com", ".net", ".org"];
   if (prohibidos.some(p => original.toLowerCase().includes(p))) return true;
   if (/[\p{P}\p{S}\s\d]/gu.test(original)) return true;
-  return false; // Filtro simplificado, ajusta según necesidad
+  return false;
 }
 
 async function ejecutarKickLocal(ctx, targetChatId, targetUserId, razon) {
@@ -93,13 +93,22 @@ async function enviarValidacionPrivada(ctx, user, idStr, grupoNombre) {
   temporizadoresSolicitudes.set(`${user.id}_${idStr}`, timer);
 }
 
+// --- COMANDOS ---
+bot.command('start', (ctx) => {
+  ctx.reply("💀 **Sistema Portero en línea.**\n\nEl bot está configurado para gestionar el ingreso a los grupos autorizados. Si tienes problemas, contacta al administrador.", { parse_mode: "Markdown" });
+});
+
+bot.command('help', (ctx) => {
+  ctx.reply("⚙️ **Ayuda - Portero**\n\n- El bot gestiona automáticamente las solicitudes de ingreso.\n- Filtra nombres de usuario sospechosos.\n- Requiere aceptación manual de reglas mediante botones.\n\nPara soporte, contacta al staff del grupo.", { parse_mode: "Markdown" });
+});
+
 // --- LÓGICA PRINCIPAL ---
 async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
   const idStr = String(chatId);
   
   if (nombreInvalido(user.first_name)) {
     await ctx.telegram.declineChatJoinRequest(idStr, user.id);
-    return; // CORRECCIÓN: Salida inmediata
+    return;
   }
 
   try {
@@ -122,14 +131,14 @@ bot.on('new_chat_members', async (ctx) => {
     if (member.is_bot) continue;
     if (nombreInvalido(member.first_name)) {
       await ejecutarKickLocal(ctx, ctx.chat.id, member.id, "Nombre inválido");
-      continue; // CORRECCIÓN: Salta al siguiente usuario sin ejecutar nada más
+      continue;
     }
     await ctx.telegram.restrictChatMember(ctx.chat.id, member.id, { permissions: { can_send_messages: false } });
     await enviarValidacionPrivada(ctx, member, ctx.chat.id, ctx.chat.title);
   }
 });
 
-// --- CALLBACKS Y COMANDOS ---
+// --- CALLBACKS ---
 bot.on('callback_query', async (ctx) => {
   const data = ctx.callbackQuery.data;
   if (data.startsWith("reg_ok_")) {
