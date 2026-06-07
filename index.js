@@ -234,15 +234,15 @@ async function enviarValidacionPrivada(ctx, user, idStr, grupoNombre) {
 
   const mensajeLlamativo = 
     `⚡ <b>¡SOLICITUD RECIBIDA CON ÉXITO!</b> ⚡\n` +
-    `━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+    `━━━━━━━━━━\n\n` +
     `Hola <b>${user.first_name}</b>, para activar tus permisos en el grupo: \n` +
     `🛡️ <b>${grupoNombre}</b> 🛡️\n\n` +
     `📋 <b>REQUISITO OBLIGATORIO:</b>\n` +
     `Debes leer las normas internas aquí expuestas y presionar el botón de abajo:\n\n` +
     `👇 <b>UTILIZA ESTOS BOTONES PARA ENTRAR O DECLINAR</b> 👇\n` +
-    `━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+    `━━━━━━━━━━\n` +
     `${textoReglamento}\n` +
-    `━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+    `━━━━━━━━━━`;
 
   const msgEnviado = await ctx.telegram.sendMessage(user.id, mensajeLlamativo, {
     parse_mode: "HTML",
@@ -627,11 +627,11 @@ bot.command('gban', async (ctx) => {
       const notifReporte = await ctx.telegram.sendMessage(
         gId,
         `🛡️ <b>GBAN — Federación CANCERBEROS</b>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+        `━━━━━━━━━━\n\n` +
         `🆔 <b>ID Penalizado:</b> <a href="tg://user?id=${targetUid}">${targetUid}</a>\n` +
         `👤 <b>Nombre:</b> ${infoUsuario.first_name}\n` +
         `⚖️ <b>Razón:</b> ${razon}\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `━━━━━━━━━━\n` +
         `⚠️ <i>Esta alerta se auto-eliminará en 4 minutos.</i>`,
         { parse_mode: "HTML" }
       ).catch(() => {});
@@ -658,7 +658,7 @@ bot.command('gban', async (ctx) => {
       ctx.chat.id,
       avisoInicial.message_id,
       null,
-      `✅ <b>GBAN COMPLETADO</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+      `✅ <b>GBAN COMPLETADO</b>\n━━━━━━━━━━\n` +
       `🛡️ <b>Grupos Limpiados:</b> ${baneadosExito}\n\n` +
       `❌ <b>Errores/Grupos sin Aplicar:</b> ${fallidos}`,
       { parse_mode: "HTML" }
@@ -696,7 +696,7 @@ bot.command('gmsg', async (ctx) => {
   const mensajeGlobal = ctx.message.text.split(" ").slice(1).join(" ").trim();
   if (!mensajeGlobal) return ctx.reply("⚠️ Usa: <code>/gmsg [Mensaje]</code>", { parse_mode: "HTML" });
 
-  const plantilla = `📢 <b>COMUNICADO OFICIAL 📢 FEDERACIÓN CANCERBEROS</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n${mensajeGlobal}\n`;
+  const plantilla = `📢 <b>COMUNICADO OFICIAL 📢 FEDERACIÓN CANCERBEROS</b>\n━━━━━━━━━━\n\n${mensajeGlobal}\n`;
   let ok = 0;
 
   for (const [gId] of gruposActivos.entries()) {
@@ -741,7 +741,7 @@ bot.command('reanudarbot', async (ctx) => {
   // Mensaje de confirmación único
   return ctx.reply(
     `▶️ <b>SISTEMA REANUDADO CON ÉXITO</b>\n` +
-    `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+    `━━━━━━━━━━\n\n` +
     `🛡️ El escudo protector ha sido reactivado en: <b>${nombreGrupo}</b>.\n\n` +
     `📥 <i>Nota: Telegram enviará las solicitudes pendientes de forma automática a través del flujo en tiempo real.</i>`, 
     { parse_mode: "HTML" }
