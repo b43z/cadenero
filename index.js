@@ -1,3 +1,4 @@
+avaScript
 // ============================================================================
 //   SISTEMA DE CONTROL PRO — MONITOR CENTRAL DE SEGURIDAD (VERSION OPTIMIZADA)
 // ============================================================================
@@ -8,6 +9,7 @@ const fs = require('fs');
 const path = require('path');
 const app = express();
 
+// --- CONFIGURACIÓN Y VALIDACIÓN ---
 if (!process.env.BOT_TOKEN || !process.env.WEBHOOK_URL || !process.env.WEBHOOK_SECRET_TOKEN) {
   console.error("❌ ERROR CRÍTICO: Faltan variables de entorno esenciales");
   process.exit(1);
@@ -16,7 +18,6 @@ if (!process.env.BOT_TOKEN || !process.env.WEBHOOK_URL || !process.env.WEBHOOK_S
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const gruposActivos = new Map();
 const gruposAutorizados = new Set();
-const mensajesActivos = new Map();           
 const temporizadoresSolicitudes = new Map(); 
 
 let botPausado = false; 
@@ -35,12 +36,6 @@ function cargarConfiguracionMaestra() {
         gruposAutorizados.add(idStr);
       });
     }
-  } catch (err) { console.error("❌ PERSISTENCIA:", err.message); }
-}
-
-function guardarConfiguracionMaestra() {
-  try {
-    fs.writeFileSync(RUTA_JSON, JSON.stringify(Array.from(gruposActivos.values()), null, 2), 'utf8');
   } catch (err) { console.error("❌ PERSISTENCIA:", err.message); }
 }
 
@@ -68,7 +63,7 @@ function nombreInvalido(nombre) {
   return false;
 }
 
-async function ejecutarKickLocal(ctx, targetChatId, targetUserId, razon) {
+async function ejecutarKickLocal(ctx, targetChatId, targetUserId) {
   try {
     await ctx.telegram.banChatMember(targetChatId, targetUserId);
     await ctx.telegram.unbanChatMember(targetChatId, targetUserId);
@@ -86,7 +81,7 @@ async function enviarValidacionPrivada(ctx, user, idStr, grupoNombre) {
 
   const timer = setTimeout(async () => {
     await ctx.telegram.deleteMessage(user.id, msgEnviado.message_id).catch(() => {});
-    await ejecutarKickLocal(ctx, idStr, user.id, "Tiempo agotado");
+    await ejecutarKickLocal(ctx, idStr, user.id);
     temporizadoresSolicitudes.delete(`${user.id}_${idStr}`);
   }, 600000); 
 
@@ -94,30 +89,42 @@ async function enviarValidacionPrivada(ctx, user, idStr, grupoNombre) {
 }
 
 // --- COMANDOS ---
-bot.command('start', (ctx) => {
-  ctx.reply("💀 **Sistema Portero en línea.**\n\nEl bot está configurado para gestionar el ingreso a los grupos autorizados. Si tienes problemas, contacta al administrador.", { parse_mode: "Markdown" });
+bot.command('start', async (ctx) => {
+  const nombreGrupo = ctx.chat.title || "Privado";
+  const esAdmin = await esAdminDelGrupo(ctx, ctx.from.id, ctx.chat.id);
+  const permisos = esAdmin ? "Gestión Total (Administrador)" : "Usuario Restringido (Lectura)";
+  
+  ctx.reply(`💀 **Sistema Portero en ${nombreGrupo}**\n\n` +
+            `👤 **Usuario:** ${ctx.from.first_name}\n` +
+            `🛡️ **Estado:** ${permisos}\n\n` +
+            `El bot está activo protegiendo el ingreso.`, { parse_mode: "Markdown" });
 });
 
 bot.command('help', (ctx) => {
-  ctx.reply("⚙️ **Ayuda - Portero**\n\n- El bot gestiona automáticamente las solicitudes de ingreso.\n- Filtra nombres de usuario sospechosos.\n- Requiere aceptación manual de reglas mediante botones.\n\nPara soporte, contacta al staff del grupo.", { parse_mode: "Markdown" });
+  const ayuda = `⚙️ **Manual de Comandos - Portero**\n\n` +
+                `1. /start\n` +
+                `   - Quién: Todos\n` +
+                `   - Explicación: Info del grupo y tus permisos actuales.\n\n` +
+                `2. /help\n` +
+                `   - Quién: Todos\n` +
+                `   - Explicación: Muestra este menú de ayuda.\n\n` +
+                `*Nota: La administración de miembros es automática mediante eventos de unión.*`;
+  
+  ctx.reply(ayuda, { parse_mode: "Markdown" });
 });
 
 // --- LÓGICA PRINCIPAL ---
 async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
   const idStr = String(chatId);
-  
   if (nombreInvalido(user.first_name)) {
     await ctx.telegram.declineChatJoinRequest(idStr, user.id);
     return;
   }
-
   try {
     await ctx.telegram.approveChatJoinRequest(idStr, user.id);
     await ctx.telegram.restrictChatMember(idStr, user.id, { permissions: { can_send_messages: false } });
     await enviarValidacionPrivada(ctx, user, idStr, grupoNombre);
-  } catch (err) {
-    await ejecutarKickLocal(ctx, idStr, user.id, "Error procesando");
-  }
+  } catch (err) { await ejecutarKickLocal(ctx, idStr, user.id); }
 }
 
 // --- EVENTOS ---
@@ -130,7 +137,7 @@ bot.on('new_chat_members', async (ctx) => {
   for (const member of ctx.message.new_chat_members) {
     if (member.is_bot) continue;
     if (nombreInvalido(member.first_name)) {
-      await ejecutarKickLocal(ctx, ctx.chat.id, member.id, "Nombre inválido");
+      await ejecutarKickLocal(ctx, ctx.chat.id, member.id);
       continue;
     }
     await ctx.telegram.restrictChatMember(ctx.chat.id, member.id, { permissions: { can_send_messages: false } });
@@ -138,7 +145,6 @@ bot.on('new_chat_members', async (ctx) => {
   }
 });
 
-// --- CALLBACKS ---
 bot.on('callback_query', async (ctx) => {
   const data = ctx.callbackQuery.data;
   if (data.startsWith("reg_ok_")) {
