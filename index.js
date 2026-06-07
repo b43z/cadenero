@@ -657,17 +657,29 @@ bot.command('reanudarrechazo', async (ctx) => {
 // --- BLOQUE 5: Servidor Web ---
 const PORT = process.env.PORT || 3000;
 
+// Validar que exista el token secreto del webhook para producción
+if (!process.env.WEBHOOK_SECRET_TOKEN) {
+  console.warn("⚠️ ALERTA DE SEGURIDAD: 'WEBHOOK_SECRET_TOKEN' no está definido. El bot es vulnerable a Spoofing.");
+}
+
 // Envolvemos la conexión en un setTimeout para darle tiempo a Railway de activar el internet
 setTimeout(() => {
   console.log("🌐 Conectando con la API de Telegram...");
-  bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}/bot${process.env.BOT_TOKEN}`)
-    .then(() => console.log("✅ Webhook de Telegram configurado con éxito."))
+  
+  // Configuramos el webhook pasando el objeto de opciones con el secret_token
+  bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}/bot${process.env.BOT_TOKEN}`, {
+    secret_token: process.env.WEBHOOK_SECRET_TOKEN || "ClaveTemporalSegura123!"
+  })
+    .then(() => console.log("✅ Webhook de Telegram configurado con éxito y protegido con Secret Token."))
     .catch(err => console.error("⚠️ Error al configurar Webhook (reintentando internamente):", err.message));
 }, 5000); // 5 segundos de espera obligatoria al arrancar
 
-app.use(bot.webhookCallback(`/bot${process.env.BOT_TOKEN}`));
+// Modificamos el middleware pasándole la opción secretToken para que valide de forma automática la cabecera entrante
+app.use(bot.webhookCallback(`/bot${process.env.BOT_TOKEN}`, {
+  secretToken: process.env.WEBHOOK_SECRET_TOKEN || "ClaveTemporalSegura123!"
+}));
 
-app.get('/', (req, res) => res.send('🚀 Federación Cancerberos Shield Online con Base Fija.'));
+app.get('/', (req, res) => res.send('🚀 Federación Cancerberos Shield Online con Base Fija y Filtro Anti-Spoofing.'));
 
 app.listen(PORT, () => console.log("🚀 Servidor escuchando en el puerto " + PORT));
 
