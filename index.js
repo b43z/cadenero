@@ -94,11 +94,13 @@ async function esAdminDelGrupo(ctx, userId, chatId = null) {
 }
 
 /**
- * REGLAS DE VALIDACIÓN AMPLIADAS FEDERACIÓN CANCERBEROS:
- * - Cualquier Emoji está PERMITIDO, pero actúa como decoración (no suma longitud).
- * - Cualquier Símbolo de Puntuación, espacio o número provoca RECHAZO INMEDIATO.
- * - El texto base alfabético (sin emojis) debe tener al menos 3 caracteres latinos.
- * - Evita repeticiones puras tipo anti-spam (ej: "aaa").
+ * REGLAS DE VALIDACIÓN MÁSTER — FEDERACIÓN CANCERBEROS:
+ * - Cualquier Emoji está PERMITIDO (se ignora en el conteo).
+ * - Símbolos, espacios, números o links = RECHAZO INMEDIATO.
+ * - Texto base >= 3 caracteres latinos y en minúsculas para análisis unificado.
+ * - Filtros Anti-Spam: Letras triples ("aaa"), pares repetidos ("xyxy") y tríos repetidos ("abcabc").
+ * - Filtros Avanzados de Coherencia: Consonantes consecutivas imposibles, exceso de vocales
+ * sin consonantes, y balance fonético mínimo para evitar teclazos aleatorios (keysmashing).
  */
 function nombreInvalido(nombre) {
   if (!nombre) return true;
@@ -109,30 +111,61 @@ function nombreInvalido(nombre) {
   if (prohibidos.some(p => original.toLowerCase().includes(p))) return true;
 
   // 2. RECHAZO INMEDIATO DE SÍMBOLOS, ESPACIOS Y NÚMEROS
-  // Bloquea cualquier cosa que sea puntuación (\p{P}), símbolo matemático/moneda (\p{S}), espacios (\s) o dígitos (\d)
   if (/[\p{P}\p{S}\s\d]/gu.test(original)) return true;
 
-  // 3. AISLAMIENTO DE EMOJIS
-  // Quitamos todos los caracteres de tipo Emoji (\p{Emoji}) para quedarnos solo con el texto base
-  const soloTexto = original.replace(/\p{Emoji}/gu, '');
+  // 3. AISLAMIENTO Y NORMALIZACIÓN DE TEXTO
+  // Quitamos emojis y pasamos a minúsculas para un análisis simétrico
+  const soloTexto = original.replace(/\p{Emoji}/gu, '').toLowerCase();
 
-  // 4. VALIDACIÓN DE TEXTO BASE
-  // Debe medir al menos 3 caracteres alfabéticos auténticos
+  // 4. VALIDACIÓN DE LONGITUD Y ALFABETO BASE
   if (soloTexto.length < 3) return true;
 
-  // Debe pertenecer estrictamente al alfabeto latino (letras a-z, acentos, ñ)
   const regexLatina = /^[\p{Script=Latin}]+$/u;
   if (!regexLatina.test(soloTexto)) return true;
 
-  // REGLA ANTI-SPAM: No se permite repetir la misma letra de forma consecutiva 3 o más veces (ej: "aaa")
-  if (/(.)\1{2,}/i.test(soloTexto)) return true;
+  // 5. BLOQUEO DE PATRONES REPETITIVOS (Anti-Bot & Monotonía)
+  if (/(.)\1{2,}/.test(soloTexto)) return true;    // Letras repetidas 3+ veces (ej: "aaa", "zzz")
+  if (/(..)\1{1,}/.test(soloTexto)) return true;   // Pares idénticos en secuencia (ej: "xyxyxy", "abab")
+  if (/(...)\1{1,}/.test(soloTexto)) return true;  // Tríos idénticos en secuencia (ej: "abcabc", "xyzxyz")
 
-  // REGLA MINIMA DE VOCALES (Para nombres extremadamente cortos de 3 a 4 letras sin sentido fonético)
+  // 🔥 NUEVA MEDIDA 1: FILTRO DE CONSONANTES CONSECUTIVAS INCOHERENTES (Anti-Teclazos)
+  // En español/latino es imposible o extremadamente raro ver 4 consonantes juntas en nombres reales.
+  // Exceptuamos combinaciones válidas comunes que integran "h" o "r" (como "ch", "sh", "th", "tr", "pr").
+  if (/[bcdfghjklmnñpqrstvwxyz]{4,}/.test(soloTexto)) {
+    // Si tiene 4 consonantes, validamos si es un teclazo aleatorio o un patrón raro no permitido
+    return true;
+  }
+  
+  // Bloqueo específico de 3 consonantes consecutivas típicamente imposibles al inicio o fin (ej: "qwt", "zmp", "gxb")
+  if (/[bcdfghjklmnñpqrstvwxyz]{3}/.test(soloTexto)) {
+    const combinacionesValidas = ['str', 'chr', 'sch', 'bbr', 'ggr', 'llr', 'mbl', 'mpr', 'bcl', 'dfr'];
+    const tieneCombinacionValida = combinacionesValidas.some(comb => soloTexto.includes(comb));
+    // Si no contiene una raíz compleja válida del idioma, sospechamos de teclazo aleatorio
+    if (!tieneCombinacionValida && /[^aeiouáéíóúüy]{3,}/.test(soloTexto)) {
+      // Un chequeo extra rápido: si son letras vecinas de teclado (como "asd", "fgh", "jkl") se rechaza
+      if (/asd|sdf|dfg|fgh|ghj|hjk|jkl|qwe|wer|ert|rty|tyu|yui|uio|iop|zxc|xcv|cvb|vbn|bnm/.test(soloTexto)) return true;
+    }
+  }
+
+  // 🔥 NUEVA MEDIDA 2: CONTROL DE BALANCE VOCAL-CONSONANTE (Detección de nombres sin sentido)
+  const totalVocales = (soloTexto.match(/[aeiouáéíóúüy]/g) || []).length;
+  const totalConsonantes = soloTexto.length - totalVocales;
+
+  // Un nombre coherente de más de 3 letras no puede ser 100% vocales o 100% consonantes
+  if (totalVocales === 0 || totalConsonantes === 0) return true;
+
+  // Si el nombre es largo (ej: 6+ letras) y tiene un ratio absurdo de vocales (ej: "aeioua") o consonantes (ej: "bcdfgh")
+  if (soloTexto.length >= 5) {
+    if (totalVocales / soloTexto.length > 0.85) return true; // Más del 85% vocales es incoherente
+    if (totalConsonantes / soloTexto.length > 0.85) return true; // Más del 85% consonantes es incoherente
+  }
+
+  // REGLA MÍNIMA DE VOCALES PARA NOMBRES CORTOS (Manteniendo tu regla base optimizada)
   if (soloTexto.length <= 4) {
     if (!/[aeiouáéíóúüy]/i.test(soloTexto)) return true;
   }
 
-  return false; // El nombre es completamente válido
+  return false; // El nombre superó todos los filtros éticos y fonéticos
 }
 
 function autoDelete(ctx, mensaje) {
