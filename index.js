@@ -372,7 +372,7 @@ bot.on('new_chat_members', async (ctx) => {
   }
 });
 
-// --- MANEJADOR UNIFICADO DE CALLBACK_QUERY ---
+// --- MANEJADOR UNIFICADO DE CALLBACK_QUERY (VERSION CORREGIDA) ---
 bot.on('callback_query', async (ctx) => {
   try {
     const data = ctx.callbackQuery.data;
@@ -384,7 +384,7 @@ bot.on('callback_query', async (ctx) => {
       const targetChatId = data.split("_")[2];
       try {
         await enviarValidacionPrivada(ctx, ctx.from, targetChatId, "el grupo");
-        await ctx.answerCbQuery("✅ Revisa tu chat privado con el bot.");
+        await ctx.answerCbQuery("✅ Revisa tu chat privado.");
       } catch (e) { 
         await ctx.answerCbQuery("❌ No pude enviarte el privado. Inicia el bot primero.", { show_alert: true }); 
       }
@@ -405,13 +405,25 @@ bot.on('callback_query', async (ctx) => {
       }
 
       try {
-        await ctx.deleteMessage(messageId).catch(() => {});
-        await ctx.telegram.restrictChatMember(targetChatId, userId, { permissions: {} });
-        ctx.reply(`✅ <b>¡Acceso Autorizado!</b> Tus permisos han sido activados en <b>${grupoNombre}</b>.`, { parse_mode: "HTML" })
-          .then(m => setTimeout(() => ctx.deleteMessage(m.message_id).catch(() => {}), 5000))
-          .catch(() => {});
+        // Remover restricción
+        await ctx.telegram.restrictChatMember(targetChatId, userId, { permissions: { can_send_messages: true } });
+        
+        // Actualizar mensaje privado: confirmación + botón de retorno
+        await ctx.editMessageText(`✅ <b>¡Acceso Autorizado!</b>\n\nBienvenido a <b>${grupoNombre}</b>.`, { 
+          parse_mode: "HTML",
+          reply_markup: {
+            inline_keyboard: [[
+              { text: "⬅️ REGRESAR AL GRUPO", url: `https://t.me/c/${targetChatId.replace('-100', '')}` }
+            ]]
+          }
+        });
+
+        // Opcional: Avisar en el grupo que el usuario ya entró
+        await ctx.telegram.sendMessage(targetChatId, `👤 <a href="tg://user?id=${userId}">${ctx.from.first_name}</a> ha aceptado las reglas y ya puede participar.`, { parse_mode: "HTML" })
+          .then(m => setTimeout(() => ctx.telegram.deleteMessage(targetChatId, m.message_id).catch(() => {}), 10000));
+
       } catch (err) {
-        console.error("❌ Error al remover mute:", err.message);
+        console.error("❌ Error en reg_ok_:", err.message);
       }
       return;
     }
@@ -424,13 +436,10 @@ bot.on('callback_query', async (ctx) => {
       if (temporizadoresSolicitudes.has(llaveKick)) clearTimeout(temporizadoresSolicitudes.get(llaveKick));
 
       try {
-        let infoUsuario = { first_name: "Usuario" };
-        try { infoUsuario = await ctx.telegram.getChat(userId); } catch {}
-        
-        await ctx.deleteMessage(messageId).catch(() => {});
-        await ejecutarKickLocal(ctx, targetChatId, userId, infoUsuario.first_name, "El usuario declinó el reglamento.");
+        await ctx.editMessageText("❌ <b>Has rechazado el reglamento.</b>\nSerás expulsado del grupo automáticamente.", { parse_mode: "HTML" });
+        await ejecutarKickLocal(ctx, targetChatId, userId, ctx.from.first_name, "El usuario declinó el reglamento.");
       } catch (err) {
-        console.error("❌ Error al procesar reg_no:", err.message);
+        console.error("❌ Error en reg_no_:", err.message);
       }
       return;
     }
@@ -441,24 +450,18 @@ bot.on('callback_query', async (ctx) => {
       const targetChatId = String(ctx.chat.id);
 
       if (!(await esAdminDelGrupo(ctx, userId, targetChatId))) {
-        return ctx.answerCbQuery("❌ Operación denegada. Solo administradores.", { show_alert: true });
+        return ctx.answerCbQuery("❌ Solo administradores.", { show_alert: true });
       }
 
-      await ctx.answerCbQuery("💀 Ejecutando baneo global...", { show_alert: false });
+      await ctx.answerCbQuery("💀 Ejecutando baneo global...");
       
       try {
-        let infoUsuario = { first_name: "Usuario" };
-        try { infoUsuario = await ctx.telegram.getChat(targetUserId); } catch {}
-
         let baneadosExito = 0;
         for (const [gId] of gruposActivos.entries()) {
-          try {
-            await ctx.telegram.banChatMember(gId, targetUserId);
-            baneadosExito++;
-          } catch (e) {}
+          try { await ctx.telegram.banChatMember(gId, targetUserId); baneadosExito++; } catch (e) {}
         }
         await ctx.deleteMessage(messageId).catch(() => {});
-        ctx.reply(`✅ <b>Usuario expulsado y baneo ejecutado en ${baneadosExito} grupos.</b>`).then(m => setTimeout(() => ctx.deleteMessage(m.message_id).catch(() => {}), 6000));
+        ctx.reply(`✅ <b>Baneo global ejecutado en ${baneadosExito} grupos.</b>`, { parse_mode: "HTML" });
       } catch (err) {
         console.error("❌ Error en baneo global:", err.message);
       }
@@ -466,7 +469,7 @@ bot.on('callback_query', async (ctx) => {
     }
 
   } catch (err) {
-    console.error("❌ Fallo crítico en callback_query:", err.message);
+    console.error("❌ Fallo en callback_query:", err.message);
   }
 });
 
