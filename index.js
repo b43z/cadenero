@@ -306,7 +306,7 @@ setTimeout(() => {
   }).then(() => console.log("✅ Webhook configurado."));
 }, 5000);
 
-app.use(bot.webhookCallback(`/bot${process.env.BOT_TOKEN}`, { secretToken: SECRET_TOKEN }));
+app.use(bot.webhookCallback(`/bot${process.env.BOT_TOKEN}`, { secretToken: process.env.WEBHOOK_SECRET_TOKEN }));
 app.get('/', (req, res) => res.send('🚀 Shield Online.'));
 app.listen(PORT, () => console.log("🚀 Servidor en puerto " + PORT));
 
