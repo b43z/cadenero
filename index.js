@@ -236,7 +236,6 @@ bot.command('help', (ctx) => {
 
 bot.command('gban', async (ctx) => {
   const chatId = String(ctx.chat.id);
-  // Verificación de autorización y permisos
   if (!gruposAutorizados.has(chatId) || !(await esAdminDelGrupo(ctx, ctx.from.id, chatId))) return;
 
   const args = ctx.message.text.split(" ").slice(1);
@@ -249,42 +248,35 @@ bot.command('gban', async (ctx) => {
 
   let gruposAfectados = 0;
   
-  // Iterar sobre todos los grupos registrados para ejecutar la acción
-  for (const [gId, gData] of gruposActivos.entries()) {
+  for (const [gId] of gruposAutorizados.entries()) { // Usamos gruposAutorizados o gruposActivos.entries()
     try {
-      // 1. Ejecutar el baneo
       await ctx.telegram.banChatMember(gId, targetUid);
       gruposAfectados++;
 
-      // 2. Enviar mensaje de formato original de la Federación en cada grupo
-      await ctx.telegram.sendMessage(gId, 
+      const msgInfo = await ctx.telegram.sendMessage(gId, 
         `⚠️ <b>GBAN - FEDERACIÓN CANCERBEROS</b> ⚠️\n\n` +
         `👤 <b>Usuario ID:</b> <code>${targetUid}</code>\n` +
         `🚫 <b>Acción:</b> Baneo Global aplicado.\n` +
         `📝 <b>Razón:</b> ${razon}\n\n` +
-        `<i>La seguridad de la Federación es nuestra prioridad.</i>`, 
+        `<i>Este mensaje se borrará en 3 minutos por seguridad.</i>`, 
         { parse_mode: "HTML" }
-      ).catch(() => {}); // Catch silencioso si el bot no tiene permisos en algún grupo
-      
-    } catch (e) {
-      console.error(`Error al banear en grupo ${gId}:`, e.message);
-    }
-  }
-// 3. Timer exclusivo de 3 minutos (180,000 ms) para este mensaje
+      );
+
+      // Timer de 3 minutos
       setTimeout(async () => {
         try {
           await ctx.telegram.deleteMessage(gId, msgInfo.message_id);
         } catch (e) {
-          console.log(`ℹ️ No se pudo borrar el mensaje de GBAN en ${gId}: ${e.message}`);
+          console.log(`ℹ️ No se pudo borrar el mensaje en ${gId}`);
         }
-      }, 180000);
-      
+      }, 180000); // 180,000 ms
+
     } catch (e) {
       console.error(`Error al banear en grupo ${gId}:`, e.message);
     }
-  }
-  // Respuesta al administrador en el chat donde se ejecutó el comando
-  return ctx.reply(`✅ <b>GBAN COMPLETADO</b>\nSe ha aplicado el baneo global en ${gruposAfectados} grupos.`, { parse_mode: "HTML" });
+  } // <--- Asegúrate de cerrar este bloque
+
+  return ctx.reply(`✅ <b>GBAN COMPLETADO</b> en ${gruposAfectados} grupos.`, { parse_mode: "HTML" });
 });
 bot.command('gmsg', async (ctx) => {
   const chatId = String(ctx.chat.id);
