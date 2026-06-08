@@ -555,11 +555,11 @@ bot.command('gban', async (ctx) => {
       const notifReporte = await ctx.telegram.sendMessage(
         gId,
         `🛡️ <b>GBAN — Federación CANCERBEROS</b>\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+        `━━━━\n\n` +
         `🆔 <b>ID Penalizado:</b> <a href="tg://user?id=${targetUid}">${targetUid}</a>\n` +
         `👤 <b>Nombre:</b> ${infoUsuario.first_name}\n` +
         `⚖️ <b>Razón:</b> ${razon}\n` +
-        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+        `━━━\n` +
         `⚠️ <i>Esta alerta se auto-eliminará en 4 minutos.</i>`,
         { parse_mode: "HTML" }
       ).catch(() => {});
@@ -586,7 +586,7 @@ bot.command('gban', async (ctx) => {
       ctx.chat.id,
       avisoInicial.message_id,
       null,
-      `✅ <b>GBAN COMPLETADO</b>\n━━━━━━━━━━━━━━━━━━━━\n` +
+      `✅ <b>GBAN COMPLETADO</b>\n━━━━━━n` +
       `🛡️ <b>Grupos Limpiados:</b> ${baneadosExito}\n\n` +
       `❌ <b>Errores/Grupos sin Aplicar:</b> ${fallidos}`,
       { parse_mode: "HTML" }
@@ -626,7 +626,7 @@ bot.command('gmsg', async (ctx) => {
 
   // Estética ajustada con subrayado de línea única y compacta
   const plantilla = `📢 <b>COMUNICADO OFICIAL 📢 FEDERACIÓN CANCERBEROS</b>\n` +
-                    `──────────────────────────────────────────────\n\n` +
+                    `────────>\n\n` +
                     `${mensajeGlobal}\n`;
   let ok = 0;
 
