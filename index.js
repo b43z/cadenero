@@ -171,9 +171,9 @@ bot.on('callback_query', async (ctx) => {
     const data = ctx.callbackQuery.data;
     const userId = ctx.from.id;
     
-    // CORRECCIÓN: Obtenemos el chat y el mensaje a través del objeto callbackQuery
+    // Obtenemos el chat y el mensaje a través del objeto callbackQuery
     const message = ctx.callbackQuery.message;
-    if (!message) return; // Seguridad: Si no hay mensaje, abortamos
+    if (!message) return;
     
     const chatId = message.chat.id;
     const messageId = message.message_id;
@@ -201,7 +201,6 @@ bot.on('callback_query', async (ctx) => {
         parse_mode: "HTML",
         reply_markup: { 
           inline_keyboard: [
-            [{ text: "⬅️ Volver al Grupo", url: "https://t.me/TU_LINK_REAL" }],
             [{ text: "❌ CERRAR", callback_data: "close_rules" }]
           ] 
         }
@@ -211,8 +210,9 @@ bot.on('callback_query', async (ctx) => {
     }
 
     if (data === "close_rules") { 
-      // Al ser un mensaje privado, ctx.deleteMessage() funcionará correctamente aquí
-      await ctx.deleteMessage().catch(() => {}); 
+      // Eliminamos el mensaje donde el usuario presionó CERRAR
+      await ctx.deleteMessage(messageId).catch((err) => console.error("Error al cerrar:", err.message));
+      await ctx.answerCbQuery("Cerrado.");
       return;
     }
   } catch (e) { console.error("Error en Callback:", e.message); }
