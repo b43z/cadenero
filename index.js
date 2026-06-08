@@ -198,66 +198,107 @@ bot.on('callback_query', async (ctx) => {
     if (data === "close_rules") { await ctx.deleteMessage().catch(() => {}); return; }
   } catch (err) { console.error("❌ Callback Query:", err.message); }
 });
+// --- BLOQUE 4: Comandos de Consola y Control Administrativo ---
+
 bot.start((ctx) => {
   const chatId = String(ctx.chat.id);
-  if (ctx.chat.type === 'private') return ctx.reply("👋 Sistema de Seguridad Activo.");
+  if (ctx.chat.type === 'private') {
+    return ctx.reply("👋 Hola. Los grupos protegidos.");
+  }
   if (!gruposAutorizados.has(chatId)) return; 
   const g = gruposActivos.get(chatId);
   return ctx.reply(
-    `👋 Bot activo: <b>${g.nombre}</b>\n` +
+    `👋 Bot activo en el grupo <b>${g.nombre}</b>.\n\n` +
     `🛡️ Estado: <b>${botPausado ? "⏸️ PAUSADO" : "🟢 ACTIVO"}</b>\n` +
-    `📊 Procesados: ${g.usuariosProcesados} | 🚫 Rechazados: ${g.usuariosRechazados}`,
+    `📊 Totales Procesados: ${g.usuariosProcesados} | 🚫 Rechazados: ${g.usuariosRechazados}\n` +
+    `⚙️ Reglamento Asignado: Reglamento ${g.reglamento || 1}\n` +
+    `👋 Saludos de Bienvenida: <b>${g.verBienvenida !== false ? "ON 🟢" : "OFF 🔴"}</b>\n` +
+    `🚫 Logs de Filtros/Rechazo: <b>${g.verRechazo !== false ? "ON 🟢" : "OFF 🔴"}</b>\n\n` +
+    `💡 Escribe <code>/help</code> para desplegar los comandos válidos.`,
     { parse_mode: "HTML" }
   );
 });
 
 bot.command('help', (ctx) => {
   return ctx.reply(
-    `🛡️ <b>CONTROL DE SEGURIDAD</b>\n` +
-    `• <code>/start</code> - Estado del bot.\n` +
-    `• <code>/gban</code> - Baneo global.\n` +
-    `• <code>/setrules [1/2]</code> - Cambiar reglamento.\n` +
+    `🛡️ <b>MANUAL DE COMANDOS DE CONTROL</b>\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+    `• <code>/start</code> - Ver estado e indicadores.\n` +
+    `• <code>/reglas</code> - Despliega el reglamento asignado.\n` +
+    `• <code>/setrules [1 o 2]</code> - Cambia el reglamento.\n` +
+    `• <code>/gban [ID/Respuesta] [Razón]</code> - Baneo masivo.\n` +
+    `• <code>/gmsg [Mensaje]</code> - Comunicado oficial.\n` +
     `• <code>/pausarbot</code> / <code>/reanudarbot</code> - Control global.\n` +
-    `• <code>/pausarbienvenida</code> / <code>/reanudarbienvenida</code> - Control bienvenidas.`,
+    `• <code>/pausarbienvenida</code> / <code>/reanudarbienvenida</code> - Control bienvenidas.\n` +
+    `• <code>/pausarrechazo</code> / <code>/reanudarrechazo</code> - Control logs de rechazo.`,
     { parse_mode: "HTML" }
   );
+});
+
+bot.command('gban', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  if (!gruposAutorizados.has(chatId) || !(await esAdminDelGrupo(ctx, ctx.from.id, chatId))) return;
+  const args = ctx.message.text.split(" ").slice(1);
+  let targetUid = ctx.message.reply_to_message ? String(ctx.message.reply_to_message.from.id) : args[0];
+  let razon = args.length > 1 ? args.slice(1).join(" ") : "No especificada";
+  if (!targetUid || isNaN(targetUid)) return ctx.reply("⚠️ Formato: <code>/gban [ID/Respuesta] [Razón]</code>", { parse_mode: "HTML" });
+  let baneadosExito = 0;
+  for (const [gId] of gruposActivos.entries()) {
+    try { await ctx.telegram.banChatMember(gId, targetUid); baneadosExito++; } catch (e) {}
+  }
+  return ctx.reply(`✅ <b>GBAN COMPLETADO</b> en ${baneadosExito} grupos. Razón: ${razon}`, { parse_mode: "HTML" });
+});
+
+bot.command('gmsg', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  if (!gruposAutorizados.has(chatId) || !(await esAdminDelGrupo(ctx, ctx.from.id, chatId))) return;
+  const msg = ctx.message.text.split(" ").slice(1).join(" ");
+  if (!msg) return ctx.reply("⚠️ Usa: <code>/gmsg [Mensaje]</code>", { parse_mode: "HTML" });
+  let ok = 0;
+  for (const [gId] of gruposActivos.entries()) {
+    try { await ctx.telegram.sendMessage(gId, `📢 <b>COMUNICADO OFICIAL 📢 FEDERACIÓN CANCERBEROS</b>\n────────>\n\n${msg}`, { parse_mode: "HTML" }); ok++; } catch {}
+  }
+  return ctx.reply(`✅ <b>Anuncio Desplegado</b> en ${ok} grupos.`, { parse_mode: "HTML" });
+});
+
+bot.command('setrules', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  if (!gruposAutorizados.has(chatId) || !(await esAdminDelGrupo(ctx, ctx.from.id, chatId))) return;
+  const num = parseInt(ctx.message.text.split(" ")[1]);
+  if (!REGLAMENTOS[num]) return ctx.reply("⚠️ Usa: <code>/setrules 1</code> o <code>/setrules 2</code>", { parse_mode: "HTML" });
+  const g = gruposActivos.get(chatId);
+  g.reglamento = num;
+  gruposActivos.set(chatId, g);
+  guardarConfiguracionMaestra();
+  return ctx.reply(`✅ <b>Reglamento actualizado:</b> Se aplicará el <b>Reglamento ${num}</b>.`, { parse_mode: "HTML" });
+});
+
+bot.command('reglas', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  if (!gruposAutorizados.has(chatId)) return;
+  const g = gruposActivos.get(chatId);
+  return ctx.reply(`📖 <b>Reglamento de: ${g.nombre}</b>\n\n${REGLAMENTOS[g.reglamento || 1]}`, { parse_mode: "HTML" });
+});
+
+bot.command('pausarbot', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  if (await esAdminDelGrupo(ctx, ctx.from.id, chatId)) { botPausado = true; return ctx.reply("⏸️ <b>SISTEMA EN PAUSA GLOBAL</b>", { parse_mode: "HTML" }); }
 });
 
 bot.command('reanudarbot', async (ctx) => {
   const chatId = String(ctx.chat.id);
   if (!gruposAutorizados.has(chatId) || !(await esAdminDelGrupo(ctx, ctx.from.id, chatId))) return;
   botPausado = false;
-  const grupoActual = gruposActivos.get(chatId);
-  await ctx.reply(`▶️ <b>SISTEMA REANUDADO</b> en ${grupoActual.nombre}`, { parse_mode: "HTML" });
-  
+  ctx.reply("▶️ <b>SISTEMA REANUDADO</b>", { parse_mode: "HTML" });
   try {
     const res = await ctx.telegram.callApi('getChatJoinRequests', { chat_id: chatId });
-    if (res && res.requests) {
-      for (const req of res.requests) {
-        await evaluarSolicitud(ctx, req.from, chatId, grupoActual.nombre);
-        await new Promise(r => setTimeout(r, 250));
-      }
-    }
-  } catch (err) { console.error("Error al listar solicitudes:", err.message); }
+    if (res?.requests) for (const req of res.requests) await evaluarSolicitud(ctx, req.from, chatId, gruposActivos.get(chatId).nombre);
+  } catch (e) { console.error("Error al procesar pendientes:", e.message); }
 });
 
-bot.command('pausarbienvenida', async (ctx) => {
-  const chatId = String(ctx.chat.id);
-  const g = gruposActivos.get(chatId);
-  g.verBienvenida = false;
-  guardarConfiguracionMaestra();
-  return ctx.reply("🔴 <b>Bienvenidas desactivadas.</b>", { parse_mode: "HTML" });
-});
-
-bot.command('reanudarbienvenida', async (ctx) => {
-  const chatId = String(ctx.chat.id);
-  const g = gruposActivos.get(chatId);
-  g.verBienvenida = true;
-  guardarConfiguracionMaestra();
-  return ctx.reply("🟢 <b>Bienvenidas activadas.</b>", { parse_mode: "HTML" });
-});
-const PORT = process.env.PORT || 3000;
-const SECRET_TOKEN = process.env.WEBHOOK_SECRET_TOKEN;
+bot.command('pausarbienvenida', async (ctx) => { const g = gruposActivos.get(String(ctx.chat.id)); g.verBienvenida = false; guardarConfiguracionMaestra(); ctx.reply("🔴 <b>Bienvenidas Ocultas.</b>", { parse_mode: "HTML" }); });
+bot.command('reanudarbienvenida', async (ctx) => { const g = gruposActivos.get(String(ctx.chat.id)); g.verBienvenida = true; guardarConfiguracionMaestra(); ctx.reply("🟢 <b>Bienvenidas Activadas.</b>", { parse_mode: "HTML" }); });
+bot.command('pausarrechazo', async (ctx) => { const g = gruposActivos.get(String(ctx.chat.id)); g.verRechazo = false; guardarConfiguracionMaestra(); ctx.reply("🔴 <b>Logs de Rechazo Ocultos.</b>", { parse_mode: "HTML" }); });
+bot.command('reanudarrechazo', async (ctx) => { const g = gruposActivos.get(String(ctx.chat.id)); g.verRechazo = true; guardarConfiguracionMaestra(); ctx.reply("🟢 <b>Logs de Rechazo Activos.</b>", { parse_mode: "HTML" }); });
 
 setTimeout(() => {
   bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}/bot${process.env.BOT_TOKEN}`, {
