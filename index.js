@@ -134,8 +134,21 @@ async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
 
 // --- EVENTOS ---
 bot.on('chat_join_request', async (ctx) => {
-  if (botPausado) return;
-  await evaluarSolicitud(ctx, ctx.chatJoinRequest.from, ctx.chatJoinRequest.chat.id, ctx.chatJoinRequest.chat.title);
+  // Log para depuración: Esto aparecerá en tu consola (o logs del servidor)
+  // si Telegram está entregando correctamente el evento.
+  console.log("📥 Recibida solicitud de:", ctx.chatJoinRequest.from.username || ctx.chatJoinRequest.from.first_name);
+  
+  if (botPausado) {
+    console.log("⏸️ Bot pausado, ignorando solicitud.");
+    return;
+  }
+  
+  await evaluarSolicitud(
+    ctx, 
+    ctx.chatJoinRequest.from, 
+    ctx.chatJoinRequest.chat.id, 
+    ctx.chatJoinRequest.chat.title
+  );
 });
 
 bot.on('new_chat_members', async (ctx) => {
