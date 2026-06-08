@@ -300,15 +300,27 @@ bot.command('reanudarbienvenida', async (ctx) => { const g = gruposActivos.get(S
 bot.command('pausarrechazo', async (ctx) => { const g = gruposActivos.get(String(ctx.chat.id)); g.verRechazo = false; guardarConfiguracionMaestra(); ctx.reply("🔴 <b>Logs de Rechazo Ocultos.</b>", { parse_mode: "HTML" }); });
 bot.command('reanudarrechazo', async (ctx) => { const g = gruposActivos.get(String(ctx.chat.id)); g.verRechazo = true; guardarConfiguracionMaestra(); ctx.reply("🟢 <b>Logs de Rechazo Activos.</b>", { parse_mode: "HTML" }); });
 
+// --- BLOQUE 5: Servidor Web ---
+// 1. Declaramos las constantes necesarias
+const PORT = process.env.PORT || 3000;
+const SECRET_TOKEN_MASTER = process.env.WEBHOOK_SECRET_TOKEN;
+
+// 2. Configuración del Webhook
 setTimeout(() => {
+  console.log("🌐 Conectando con la API de Telegram...");
   bot.telegram.setWebhook(`${process.env.WEBHOOK_URL}/bot${process.env.BOT_TOKEN}`, {
-    secret_token: SECRET_TOKEN
-  }).then(() => console.log("✅ Webhook configurado."));
+    secret_token: SECRET_TOKEN_MASTER
+  })
+  .then(() => console.log("✅ Webhook configurado correctamente."))
+  .catch(err => console.error("⚠️ Error al configurar Webhook:", err.message));
 }, 5000);
 
-app.use(bot.webhookCallback(`/bot${process.env.BOT_TOKEN}`, { secretToken: process.env.WEBHOOK_SECRET_TOKEN }));
-app.get('/', (req, res) => res.send('🚀 Shield Online.'));
-app.listen(PORT, () => console.log("🚀 Servidor en puerto " + PORT));
+// 3. Middleware de Express
+app.use(bot.webhookCallback(`/bot${process.env.BOT_TOKEN}`, {
+  secretToken: SECRET_TOKEN_MASTER
+}));
 
-process.on('uncaughtException', (err) => console.error('❌ CRÍTICO:', err.message));
-process.on('unhandledRejection', (reason) => console.error('❌ RECHAZO:', reason));
+app.get('/', (req, res) => res.send('🚀 Shield Online.'));
+
+// 4. Inicio del servidor (Aquí ya reconocerá la constante PORT definida arriba)
+app.listen(PORT, () => console.log("🚀 Servidor escuchando en el puerto " + PORT));
