@@ -180,9 +180,33 @@ bot.on('callback_query', async (ctx) => {
 
     if (data.startsWith("bienvenida_ban_")) {
       const targetUserId = data.split("_")[2];
-      if (!(await esAdminDelGrupo(ctx, userId, chatId))) return ctx.answerCbQuery("❌ Solo Admins.", { show_alert: true });
+      
+      // 1. Verificación de permisos
+      if (!(await esAdminDelGrupo(ctx, userId, chatId))) {
+        return ctx.answerCbQuery("❌ Solo Admins.", { show_alert: true });
+      }
+
+      // 2. Ejecutar la acción de baneo/kick
       await ejecutarKickLocal(ctx, chatId, targetUserId);
+
+      // 3. Borrar el mensaje del botón (el de bienvenida original)
       await ctx.deleteMessage(messageId).catch(() => {});
+
+      // 4. Enviar aviso de rechazo en el grupo
+      const msgConfirmacion = await ctx.reply(
+        `🚫 <b>Usuario rechazado</b>\nMotivo: <i>Actividad sospechosa</i>.`,
+        { parse_mode: "HTML" }
+      );
+
+      // 5. Programar el borrado del aviso después de 4 minutos (240,000 ms)
+      setTimeout(async () => {
+        try {
+          await ctx.telegram.deleteMessage(chatId, msgConfirmacion.message_id);
+        } catch (err) {
+          console.error("Error al borrar el mensaje de baneo automático:", err.message);
+        }
+      }, 240000); 
+
       return;
     }
 
@@ -217,6 +241,7 @@ bot.on('callback_query', async (ctx) => {
     }
   } catch (e) { console.error("Error en Callback:", e.message); }
 });
+
 
 // --- COMANDOS DE CONTROL ---
 bot.start((ctx) => {
