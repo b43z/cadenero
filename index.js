@@ -318,25 +318,23 @@ bot.on('new_chat_members', async (ctx) => {
   const nombreGrupo = ctx.chat.title || "este grupo";
   const idStr = String(chatId);
 
-  // Verificación de que el grupo esté autorizado
   if (!gruposAutorizados.has(idStr)) return;
 
   for (const member of ctx.message.new_chat_members) {
     if (member.id === ctx.botInfo.id) continue;
-    
-    // 1. Aplicar el mute preventivo de inmediato
-    await aplicarMutePreventivo(ctx, chatId, member.id, nombreGrupo);
-    
-    // 2. Crear mención segura mediante HTML (tg://user)
-    const mention = `<a href="tg://user?id=${member.id}">${member.first_name}</a>`;
-    
-    // 3. Validar el nombre del usuario
+
+    // 1. VALIDACIÓN INMEDIATA: Si el nombre es inválido, expulsar y salir del bucle
     if (nombreInvalido(member.first_name)) {
       await ejecutarKickLocal(ctx, chatId, member.id, member.first_name, "Nombre no válido.");
-      continue;
+      continue; // Salta al siguiente miembro, ignorando el resto del código
     }
 
-    // 4. Enviar mensaje de bienvenida con mención y botón de reglas
+    // 2. ACCIONES POSTERIORES: Solo se ejecutan si el nombre es válido
+    // Aplicar mute preventivo
+    await aplicarMutePreventivo(ctx, chatId, member.id, nombreGrupo);
+
+    const mention = `<a href="tg://user?id=${member.id}">${member.first_name}</a>`;
+
     try {
       const configGrupo = gruposActivos.get(idStr) || { verBienvenida: true };
       if (configGrupo.verBienvenida !== false) {
@@ -353,7 +351,7 @@ bot.on('new_chat_members', async (ctx) => {
           }
         );
 
-        // 5. Iniciar timer de seguridad (10 minutos para aceptar o ser expulsado)
+        // 3. Iniciar timer de seguridad
         const llaveKick = `${member.id}_${idStr}_kick`;
         const timer = setTimeout(async () => {
           try {
@@ -362,7 +360,7 @@ bot.on('new_chat_members', async (ctx) => {
               await ejecutarKickLocal(ctx, chatId, member.id, member.first_name, "Tiempo agotado.");
             }
           } catch (e) { console.error("Error en timer de seguridad:", e.message); }
-        }, 600000); 
+        }, 600000); // 10 minutos
         
         temporizadoresSolicitudes.set(llaveKick, timer);
       }
