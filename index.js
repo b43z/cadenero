@@ -244,6 +244,18 @@ bot.on('callback_query', async (ctx) => {
 
 
 // --- COMANDOS DE CONTROL ---
+
+// Comando Help
+bot.command('help', (ctx) => {
+  const ayuda = `<b>🛠 COMANDOS DE CONTROL</b>\n\n` +
+                `<b>/gban [ID/Reply] [Razón]</b> - Banea usuario en todos los grupos.\n` +
+                `<b>/gmsg [Mensaje]</b> - Envía aviso oficial (auto-borrado 5m).\n` +
+                `<b>/pausarbienvenida /reanudarbienvenida</b> - Alterna bienvenidas.\n` +
+                `<b>/pausarrechazo /reanudarrechazo</b> - Alterna logs de rechazo.\n` +
+                `<b>/pausarbot /reanudarbot</b> - Pausa/Reanuda el bot globalmente.`;
+  ctx.reply(ayuda, { parse_mode: "HTML" });
+});
+
 bot.start((ctx) => {
   const chatId = String(ctx.chat.id);
   if (ctx.chat.type === 'private') return ctx.reply("👋 Hola. Los grupos protegidos.");
@@ -297,7 +309,6 @@ bot.command('gmsg', async (ctx) => {
       const msg = await ctx.telegram.sendMessage(gId, mensajeFormateado, { parse_mode: "HTML" });
       enviados++;
       
-      // Temporizador de auto-borrado: 5 minutos (300,000 ms)
       setTimeout(async () => {
         try {
           await ctx.telegram.deleteMessage(gId, msg.message_id);
@@ -310,7 +321,6 @@ bot.command('gmsg', async (ctx) => {
   return ctx.reply(`✅ Mensaje enviado a ${enviados} grupos. Se borrará automáticamente en 5 minutos.`);
 });
 
-// Comandos de toggle con validación de existencia del grupo
 const toggleCmds = [
   { cmd: 'pausarbienvenida', key: 'verBienvenida', val: false, msg: "🔴 Bienvenidas Ocultas." },
   { cmd: 'reanudarbienvenida', key: 'verBienvenida', val: true, msg: "🟢 Bienvenidas Activadas." },
