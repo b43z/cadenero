@@ -270,7 +270,19 @@ bot.command('gban', async (ctx) => {
       console.error(`Error al banear en grupo ${gId}:`, e.message);
     }
   }
-
+// 3. Timer exclusivo de 3 minutos (180,000 ms) para este mensaje
+      setTimeout(async () => {
+        try {
+          await ctx.telegram.deleteMessage(gId, msgInfo.message_id);
+        } catch (e) {
+          console.log(`ℹ️ No se pudo borrar el mensaje de GBAN en ${gId}: ${e.message}`);
+        }
+      }, 180000);
+      
+    } catch (e) {
+      console.error(`Error al banear en grupo ${gId}:`, e.message);
+    }
+  }
   // Respuesta al administrador en el chat donde se ejecutó el comando
   return ctx.reply(`✅ <b>GBAN COMPLETADO</b>\nSe ha aplicado el baneo global en ${gruposAfectados} grupos.`, { parse_mode: "HTML" });
 });
