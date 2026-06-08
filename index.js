@@ -122,7 +122,7 @@ async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
           reply_markup: { 
             inline_keyboard: [
               [{ text: "🚫 Rechazar (Ban)", callback_data: `bienvenida_ban_${user.id}` }],
-              [{ text: "¿Qué hacer en este grupo?", callback_data: `que_hacer_${idStr}` }],
+              [{ text: "¿De qué trata este grupo?", callback_data: `que_hacer_${idStr}` }],
               [{ text: "📖 Reglamento", callback_data: `show_full_rules_${idStr}` }]
             ] 
           }
@@ -189,7 +189,7 @@ bot.on('callback_query', async (ctx) => {
     if (data.startsWith("que_hacer_")) {
       const targetChatId = data.split("_")[2];
       const grupo = gruposActivos.get(targetChatId) || { reglamento: 1 };
-      const desc = grupo.reglamento === 1 ? "COTORREO: Grupo de plática y desmadre." : "COTORREO HOT: Espacio para conocer gente HOT.";
+      const desc = grupo.reglamento === 1 ? "COTORREO: NO es espacio XXX, HOT ni de Encuentros" : "COTORREO HOT: Espacio para conocer gente HOT.sin morbo pesado";
       await ctx.answerCbQuery(desc, { show_alert: true });
       return;
     }
