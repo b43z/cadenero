@@ -372,7 +372,7 @@ bot.on('new_chat_members', async (ctx) => {
   }
 });
 
-// --- MANEJADOR UNIFICADO DE CALLBACK_QUERY (VERSION CORREGIDA) ---
+// --- MANEJADOR UNIFICADO DE CALLBACK_QUERY (BLOQUE CORREGIDO) ---
 bot.on('callback_query', async (ctx) => {
   try {
     const data = ctx.callbackQuery.data;
@@ -386,44 +386,36 @@ bot.on('callback_query', async (ctx) => {
         await enviarValidacionPrivada(ctx, ctx.from, targetChatId, "el grupo");
         await ctx.answerCbQuery("✅ Revisa tu chat privado.");
       } catch (e) { 
-        await ctx.answerCbQuery("❌ No pude enviarte el privado. Inicia el bot primero.", { show_alert: true }); 
+        await ctx.answerCbQuery("❌ Inicia el bot primero.", { show_alert: true }); 
       }
       return;
     }
 
-    // 2. Aceptación de reglas (reg_ok_)
+    // 2. Aceptación de reglas (reg_ok_) - LÓGICA CORREGIDA
     if (data.startsWith("reg_ok_")) {
       const targetChatId = String(data.split("_")[2]);
       const grupo = gruposActivos.get(targetChatId);
-      const grupoNombre = grupo ? grupo.nombre : "el grupo";
+      const grupoNombre = grupo ? grupo.nombre : "tu grupo";
 
       limpiarTemporizadorSolicitud(userId, targetChatId);
-      const llaveKick = `${userId}_${targetChatId}_kick`;
-      if (temporizadoresSolicitudes.has(llaveKick)) {
-        clearTimeout(temporizadoresSolicitudes.get(llaveKick));
-        temporizadoresSolicitudes.delete(llaveKick);
-      }
-
+      
       try {
-        // Remover restricción
-        await ctx.telegram.restrictChatMember(targetChatId, userId, { permissions: { can_send_messages: true } });
+        // Borramos el mensaje de botones original
+        await ctx.deleteMessage(messageId).catch(() => {});
         
-        // Actualizar mensaje privado: confirmación + botón de retorno
-        await ctx.editMessageText(`✅ <b>¡Acceso Autorizado!</b>\n\nBienvenido a <b>${grupoNombre}</b>.`, { 
+        // Removemos el mute preventivo en el grupo
+        await ctx.telegram.restrictChatMember(targetChatId, userId, { permissions: {} });
+        
+        // Enviamos un mensaje de confirmación con botón de retorno
+        // Esto limpia la UI y permite al usuario salir del privado
+        await ctx.reply(`✅ <b>¡Acceso Autorizado!</b>\nHas sido habilitado en <b>${grupoNombre}</b>.`, { 
           parse_mode: "HTML",
           reply_markup: {
-            inline_keyboard: [[
-              { text: "⬅️ REGRESAR AL GRUPO", url: `https://t.me/c/${targetChatId.replace('-100', '')}` }
-            ]]
+            inline_keyboard: [[{ text: "⬅️ REGRESAR AL GRUPO", url: `https://t.me/c/${targetChatId.replace('-100', '')}` }]]
           }
         });
-
-        // Opcional: Avisar en el grupo que el usuario ya entró
-        await ctx.telegram.sendMessage(targetChatId, `👤 <a href="tg://user?id=${userId}">${ctx.from.first_name}</a> ha aceptado las reglas y ya puede participar.`, { parse_mode: "HTML" })
-          .then(m => setTimeout(() => ctx.telegram.deleteMessage(targetChatId, m.message_id).catch(() => {}), 10000));
-
       } catch (err) {
-        console.error("❌ Error en reg_ok_:", err.message);
+        console.error("❌ Error al procesar reg_ok:", err.message);
       }
       return;
     }
@@ -432,14 +424,12 @@ bot.on('callback_query', async (ctx) => {
     if (data.startsWith("reg_no_")) {
       const targetChatId = String(data.split("_")[2]);
       limpiarTemporizadorSolicitud(userId, targetChatId);
-      const llaveKick = `${userId}_${targetChatId}_kick`;
-      if (temporizadoresSolicitudes.has(llaveKick)) clearTimeout(temporizadoresSolicitudes.get(llaveKick));
-
       try {
-        await ctx.editMessageText("❌ <b>Has rechazado el reglamento.</b>\nSerás expulsado del grupo automáticamente.", { parse_mode: "HTML" });
-        await ejecutarKickLocal(ctx, targetChatId, userId, ctx.from.first_name, "El usuario declinó el reglamento.");
+        await ctx.deleteMessage(messageId).catch(() => {});
+        await ctx.reply("❌ Has declinado el reglamento. Serás expulsado del grupo.");
+        await ejecutarKickLocal(ctx, targetChatId, userId, "Usuario", "Declinó reglamento.");
       } catch (err) {
-        console.error("❌ Error en reg_no_:", err.message);
+        console.error("❌ Error al procesar reg_no:", err.message);
       }
       return;
     }
