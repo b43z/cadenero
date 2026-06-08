@@ -279,6 +279,37 @@ bot.command('gban', async (ctx) => {
   return ctx.reply(`✅ <b>GBAN COMPLETADO</b> en ${gruposAfectados} grupos.`, { parse_mode: "HTML" });
 });
 
+bot.command('gmsg', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  if (!gruposAutorizados.has(chatId) || !(await esAdminDelGrupo(ctx, ctx.from.id, chatId))) return;
+
+  const contenido = ctx.message.text.split(" ").slice(1).join(" ");
+  if (!contenido) return ctx.reply("⚠️ Uso: /gmsg [Tu mensaje]");
+
+  const mensajeFormateado = `<b>AVISO OFICIAL</b>\n<b>FEDERACION CANCERBEROS</b>\n` +
+                            `********* \n` +
+                            `${contenido}\n` +
+                            `**********`;
+
+  let enviados = 0;
+  for (const gId of gruposAutorizados) {
+    try {
+      const msg = await ctx.telegram.sendMessage(gId, mensajeFormateado, { parse_mode: "HTML" });
+      enviados++;
+      
+      // Temporizador de auto-borrado: 5 minutos (300,000 ms)
+      setTimeout(async () => {
+        try {
+          await ctx.telegram.deleteMessage(gId, msg.message_id);
+        } catch (err) {
+          console.error(`❌ Error al borrar mensaje en ${gId}:`, err.message);
+        }
+      }, 300000); 
+    } catch (e) { console.error(`❌ Error al enviar gmsg al grupo ${gId}:`, e.message); }
+  }
+  return ctx.reply(`✅ Mensaje enviado a ${enviados} grupos. Se borrará automáticamente en 5 minutos.`);
+});
+
 // Comandos de toggle con validación de existencia del grupo
 const toggleCmds = [
   { cmd: 'pausarbienvenida', key: 'verBienvenida', val: false, msg: "🔴 Bienvenidas Ocultas." },
