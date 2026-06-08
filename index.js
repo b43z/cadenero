@@ -236,18 +236,44 @@ bot.command('help', (ctx) => {
 
 bot.command('gban', async (ctx) => {
   const chatId = String(ctx.chat.id);
+  // Verificación de autorización y permisos
   if (!gruposAutorizados.has(chatId) || !(await esAdminDelGrupo(ctx, ctx.from.id, chatId))) return;
+
   const args = ctx.message.text.split(" ").slice(1);
   let targetUid = ctx.message.reply_to_message ? String(ctx.message.reply_to_message.from.id) : args[0];
   let razon = args.length > 1 ? args.slice(1).join(" ") : "No especificada";
-  if (!targetUid || isNaN(targetUid)) return ctx.reply("⚠️ Formato: <code>/gban [ID/Respuesta] [Razón]</code>", { parse_mode: "HTML" });
-  let baneadosExito = 0;
-  for (const [gId] of gruposActivos.entries()) {
-    try { await ctx.telegram.banChatMember(gId, targetUid); baneadosExito++; } catch (e) {}
-  }
-  return ctx.reply(`✅ <b>GBAN COMPLETADO</b> en ${baneadosExito} grupos. Razón: ${razon}`, { parse_mode: "HTML" });
-});
 
+  if (!targetUid || isNaN(targetUid)) {
+    return ctx.reply("⚠️ Formato: <code>/gban [ID/Respuesta] [Razón]</code>", { parse_mode: "HTML" });
+  }
+
+  let gruposAfectados = 0;
+  
+  // Iterar sobre todos los grupos registrados para ejecutar la acción
+  for (const [gId, gData] of gruposActivos.entries()) {
+    try {
+      // 1. Ejecutar el baneo
+      await ctx.telegram.banChatMember(gId, targetUid);
+      gruposAfectados++;
+
+      // 2. Enviar mensaje de formato original de la Federación en cada grupo
+      await ctx.telegram.sendMessage(gId, 
+        `⚠️ <b>GBAN - FEDERACIÓN CANCERBEROS</b> ⚠️\n\n` +
+        `👤 <b>Usuario ID:</b> <code>${targetUid}</code>\n` +
+        `🚫 <b>Acción:</b> Baneo Global aplicado.\n` +
+        `📝 <b>Razón:</b> ${razon}\n\n` +
+        `<i>La seguridad de la Federación es nuestra prioridad.</i>`, 
+        { parse_mode: "HTML" }
+      ).catch(() => {}); // Catch silencioso si el bot no tiene permisos en algún grupo
+      
+    } catch (e) {
+      console.error(`Error al banear en grupo ${gId}:`, e.message);
+    }
+  }
+
+  // Respuesta al administrador en el chat donde se ejecutó el comando
+  return ctx.reply(`✅ <b>GBAN COMPLETADO</b>\nSe ha aplicado el baneo global en ${gruposAfectados} grupos.`, { parse_mode: "HTML" });
+});
 bot.command('gmsg', async (ctx) => {
   const chatId = String(ctx.chat.id);
   if (!gruposAutorizados.has(chatId) || !(await esAdminDelGrupo(ctx, ctx.from.id, chatId))) return;
