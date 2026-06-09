@@ -363,7 +363,7 @@ bot.command('gmsg', async (ctx) => {
         } catch (err) {
           console.error(`❌ Error al borrar mensaje en ${gId}:`, err.message);
         }
-      }, 300000); 
+      }, 3600000); 
     } catch (e) { console.error(`❌ Error al enviar gmsg al grupo ${gId}:`, e.message); }
   }
   return ctx.reply(`✅ Mensaje enviado a ${enviados} grupos. Se borrará automáticamente en 5 minutos.`);
