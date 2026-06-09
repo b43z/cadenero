@@ -128,20 +128,21 @@ async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
         }
 
         // 2. Enviar nuevo mensaje
-        const sentMsg = await ctx.telegram.sendMessage(idStr, `👋 Bienvenido ${mention} a <b>${grupoNombre}</b>.`, { 
-          parse_mode: "HTML",
-          reply_markup: { 
-            inline_keyboard: [
-              [{ text: "🚫 Rechazar (Ban)", callback_data: `bienvenida_ban_${user.id}` }],
-              // 3. Botones en una sola línea
-              [
-                { text: "¿De qué trata este grupo?", callback_data: `que_hacer_${idStr}` },
-                { text: "📖 Reglamento", callback_data: `show_full_rules_${idStr}` }
-              ]
-            ] 
-          }
-        });
-
+const sentMsg = await ctx.telegram.sendMessage(idStr, 
+  `👋 Bienvenido <a href="tg://user?id=${user.id}">${mention}</a> (ID: <a href="tg://user?id=${user.id}"><code>${user.id}</code></a>) a <b>${grupoNombre}</b>.`, 
+  { 
+    parse_mode: "HTML",
+    reply_markup: { 
+      inline_keyboard: [
+        [{ text: "🚫 Rechazar", callback_data: `bienvenida_ban_${user.id}` }],
+        [
+          { text: "¿De qué trata?", callback_data: `que_hacer_${idStr}` },
+          { text: "📖 Reglamento", callback_data: `show_full_rules_${idStr}` }
+        ]
+      ] 
+    }
+  }
+);
         // Guardar ID para futura referencia
         mensajesBienvenida[idStr] = sentMsg.message_id;
 
@@ -247,11 +248,18 @@ bot.on('callback_query', async (ctx) => {
     if (data.startsWith("show_full_rules_")) {
       const targetChatId = data.split("_")[2];
       const grupo = gruposActivos.get(targetChatId) || { reglamento: 1 };
+      
+      // Enlace para volver al grupo
+      const inviteLink = `https://t.me/c/${targetChatId.toString().replace('-100', '')}/999999`;
+
       await ctx.telegram.sendMessage(userId, `📜 <b>REGLAMENTO COMPLETO</b>\n\n${REGLAMENTOS[grupo.reglamento]}`, { 
         parse_mode: "HTML",
         reply_markup: { 
           inline_keyboard: [
-            [{ text: "❌ CERRAR", callback_data: "close_rules" }]
+            [
+              { text: "⬅️ Regresar al grupo", url: inviteLink },
+              { text: "❌ Cerrar este mensaje", callback_data: "close_rules" }
+            ]
           ] 
         }
       });
@@ -300,9 +308,17 @@ bot.start((ctx) => {
 bot.command('gban', async (ctx) => {
   const chatId = String(ctx.chat.id);
   if (!gruposAutorizados.has(chatId) || !(await esAdminDelGrupo(ctx, ctx.from.id, chatId))) return;
+
   const args = ctx.message.text.split(" ").slice(1);
-  const targetUid = ctx.message.reply_to_message ? String(ctx.message.reply_to_message.from.id) : args[0];
-  const razon = args.length > 1 ? args.slice(1).join(" ") : "No especificada";
+  const esRespuesta = !!ctx.message.reply_to_message;
+  
+  // Si es respuesta: args son la razón. Si no es respuesta: args[0] es ID, args[1...] es razón
+  const targetUid = esRespuesta ? String(ctx.message.reply_to_message.from.id) : args[0];
+  const razonInput = esRespuesta ? args.join(" ") : args.slice(1).join(" ");
+  
+  // Asignar "Actividad sospechosa" si la razón está vacía
+  const razon = (razonInput && razonInput.trim() !== "") ? razonInput : "Actividad sospechosa";
+
   if (!targetUid || isNaN(targetUid)) return ctx.reply("⚠️ Formato: /gban [ID/Respuesta] [Razón]");
 
   let gruposAfectados = 0;
@@ -310,7 +326,13 @@ bot.command('gban', async (ctx) => {
     try {
       await ctx.telegram.banChatMember(gId, targetUid);
       gruposAfectados++;
-      const msgInfo = await ctx.telegram.sendMessage(gId, `⚠️ <b>GBAN</b>\nID: <code>${targetUid}</code>\nRazón: ${razon}`, { parse_mode: "HTML" });
+      
+      const mensajeGban = `🚨<b>BAN de Federación CANCERBEROS</b>🚨\n` +
+                          `👤 Usuario ID: <code>${targetUid}</code>\n` +
+                          `🚫 Acción: Baneo Global aplicado.\n` +
+                          `📝 Razón: ${razon}`;
+                          
+      const msgInfo = await ctx.telegram.sendMessage(gId, mensajeGban, { parse_mode: "HTML" });
       setTimeout(() => ctx.telegram.deleteMessage(gId, msgInfo.message_id).catch(() => {}), 180000);
     } catch (e) { console.error(`Error en grupo ${gId}:`, e.message); }
   }
@@ -324,10 +346,10 @@ bot.command('gmsg', async (ctx) => {
   const contenido = ctx.message.text.split(" ").slice(1).join(" ");
   if (!contenido) return ctx.reply("⚠️ Uso: /gmsg [Tu mensaje]");
 
-  const mensajeFormateado = `<b>AVISO OFICIAL</b>\n<b>FEDERACION CANCERBEROS</b>\n` +
-                            `********* \n` +
+  const mensajeFormateado = `<b>🚨AVISO OFICIAL🚨</b>\n<b>FEDERACION CANCERBEROS</b>\n` +
+                            `==========>\n` +
                             `${contenido}\n` +
-                            `**********`;
+                            `==========>`;
 
   let enviados = 0;
   for (const gId of gruposAutorizados) {
