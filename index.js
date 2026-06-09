@@ -276,12 +276,13 @@ bot.on('callback_query', async (ctx) => {
   } catch (e) { console.error("Error en Callback:", e.message); }
 });
 
-
 // --- COMANDOS DE CONTROL ---
 
 // Comando Help
 bot.command('help', (ctx) => {
   const ayuda = `<b>🛠 COMANDOS DE CONTROL</b>\n\n` +
+                `<b>/reglas</b> - Visualiza el reglamento actual.\n` +
+                `<b>/setrules [ID]</b> - Asigna un nuevo reglamento.\n` +
                 `<b>/gban [ID/Reply] [Razón]</b> - Banea usuario en todos los grupos.\n` +
                 `<b>/gmsg [Mensaje]</b> - Envía aviso oficial (auto-borrado 5m).\n` +
                 `<b>/pausarbienvenida /reanudarbienvenida</b> - Alterna bienvenidas.\n` +
@@ -312,11 +313,9 @@ bot.command('gban', async (ctx) => {
   const args = ctx.message.text.split(" ").slice(1);
   const esRespuesta = !!ctx.message.reply_to_message;
   
-  // Si es respuesta: args son la razón. Si no es respuesta: args[0] es ID, args[1...] es razón
   const targetUid = esRespuesta ? String(ctx.message.reply_to_message.from.id) : args[0];
   const razonInput = esRespuesta ? args.join(" ") : args.slice(1).join(" ");
   
-  // Asignar "Actividad sospechosa" si la razón está vacía
   const razon = (razonInput && razonInput.trim() !== "") ? razonInput : "Actividad sospechosa";
 
   if (!targetUid || isNaN(targetUid)) return ctx.reply("⚠️ Formato: /gban [ID/Respuesta] [Razón]");
@@ -368,6 +367,31 @@ bot.command('gmsg', async (ctx) => {
     } catch (e) { console.error(`❌ Error al enviar gmsg al grupo ${gId}:`, e.message); }
   }
   return ctx.reply(`✅ Mensaje enviado a ${enviados} grupos. Se borrará automáticamente en 5 minutos.`);
+});
+
+// NUEVOS COMANDOS INTEGRADOS
+bot.command('reglas', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  if (!gruposAutorizados.has(chatId)) return;
+  const g = gruposActivos.get(chatId) || { reglamento: 1 };
+  await ctx.reply(`📜 <b>REGLAMENTO</b>\n\n${REGLAMENTOS[g.reglamento]}`, { 
+    parse_mode: "HTML",
+    reply_markup: { inline_keyboard: [[{ text: "❌ Cerrar", callback_data: "close_rules" }]] }
+  });
+});
+
+bot.command('setrules', async (ctx) => {
+  const chatId = String(ctx.chat.id);
+  if (!(await esAdminDelGrupo(ctx, ctx.from.id, chatId))) return;
+  const args = ctx.message.text.split(" ");
+  const nuevoId = parseInt(args[1]);
+  if (!nuevoId || !REGLAMENTOS[nuevoId]) return ctx.reply("⚠️ Uso: /setrules [1 o 2]");
+  const g = gruposActivos.get(chatId);
+  if (g) {
+    g.reglamento = nuevoId;
+    guardarConfiguracionMaestra();
+    ctx.reply(`✅ Reglamento actualizado a: <b>${nuevoId}</b>`, { parse_mode: "HTML" });
+  }
 });
 
 const toggleCmds = [
