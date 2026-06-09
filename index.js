@@ -292,7 +292,7 @@ bot.command('help', (ctx) => {
 
 bot.start((ctx) => {
   const chatId = String(ctx.chat.id);
-  if (ctx.chat.type === 'private') return ctx.reply("👋 Hola. Los grupos protegidos.");
+  if (ctx.chat.type === 'private') return ctx.reply("👋 Hola. bot activo y protegiendo los grupos.");
   if (!gruposAutorizados.has(chatId)) return; 
   const g = gruposActivos.get(chatId);
   return ctx.reply(
@@ -328,7 +328,7 @@ bot.command('gban', async (ctx) => {
       gruposAfectados++;
       
       const mensajeGban = `🚨<b>BAN de Federación🚨</b>\n` +
-                          `<code><b>      CANCERBEROS</b></code>\n` +
+                          `<code><b>    CANCERBEROS</b></code>\n` +
                           `👤 Usuario ID: <code>${targetUid}</code>\n` +
                           `🚫 Acción: Baneo Global aplicado.\n` +
                           `📝 Razón: ${razon}`;
