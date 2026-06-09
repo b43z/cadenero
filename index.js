@@ -346,7 +346,7 @@ bot.command('gmsg', async (ctx) => {
   const contenido = ctx.message.text.split(" ").slice(1).join(" ");
   if (!contenido) return ctx.reply("⚠️ Uso: /gmsg [Tu mensaje]");
 
-  const mensajeFormateado = `<b>🚨AVISO OFICIAL🚨</b>\n<b>FEDERACION CANCERBEROS</b>\n` +
+  const mensajeFormateado = `<b>🚨   AVISO OFICIAL   🚨</b>\n<b>FEDERACION CANCERBEROS</b>\n` +
                             `==========>\n` +
                             `${contenido}\n` +
                             `==========>`;
@@ -366,7 +366,7 @@ bot.command('gmsg', async (ctx) => {
       }, 3600000); 
     } catch (e) { console.error(`❌ Error al enviar gmsg al grupo ${gId}:`, e.message); }
   }
-  return ctx.reply(`✅ Mensaje enviado a ${enviados} grupos. Se borrará automáticamente en 5 minutos.`);
+  return ctx.reply(`✅ Mensaje enviado a ${enviados} grupos. Se borrará automáticamente en 1 hora.`);
 });
 
 // NUEVOS COMANDOS INTEGRADOS
