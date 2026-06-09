@@ -327,7 +327,8 @@ bot.command('gban', async (ctx) => {
       await ctx.telegram.banChatMember(gId, targetUid);
       gruposAfectados++;
       
-      const mensajeGban = `🚨<b>BAN de Federación CANCERBEROS</b>🚨\n` +
+      const mensajeGban = `🚨<b>BAN de Federación🚨</b>\n` +
+                          `<b>CANCERBEROS</b>\n` +
                           `👤 Usuario ID: <code>${targetUid}</code>\n` +
                           `🚫 Acción: Baneo Global aplicado.\n` +
                           `📝 Razón: ${razon}`;
