@@ -8,6 +8,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const app = express();
+const mensajesBienvenida = {};
 
 if (!process.env.BOT_TOKEN || !process.env.WEBHOOK_URL || !process.env.WEBHOOK_SECRET_TOKEN) {
   console.error("❌ ERROR CRÍTICO: Faltan variables de entorno esenciales");
@@ -115,23 +116,48 @@ async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
     try {
       await ctx.telegram.approveChatJoinRequest(idStr, user.id);
       acumularMetricasRAM(idStr, 1, 0);
+      
       const configGrupo = gruposActivos.get(idStr) || { verBienvenida: true };
       if (configGrupo.verBienvenida !== false) {
-        await ctx.telegram.sendMessage(idStr, `👋 Bienvenido ${mention} a <b>${grupoNombre}</b>.`, { 
+        
+        // 1. Borrar mensaje anterior si existe para que no se acumulen
+        if (mensajesBienvenida[idStr]) {
+          try {
+            await ctx.telegram.deleteMessage(idStr, mensajesBienvenida[idStr]);
+          } catch (e) { /* El mensaje ya pudo haber sido borrado o es viejo */ }
+        }
+
+        // 2. Enviar nuevo mensaje
+        const sentMsg = await ctx.telegram.sendMessage(idStr, `👋 Bienvenido ${mention} a <b>${grupoNombre}</b>.`, { 
           parse_mode: "HTML",
           reply_markup: { 
             inline_keyboard: [
               [{ text: "🚫 Rechazar (Ban)", callback_data: `bienvenida_ban_${user.id}` }],
-              [{ text: "¿De qué trata este grupo?", callback_data: `que_hacer_${idStr}` }],
-              [{ text: "📖 Reglamento", callback_data: `show_full_rules_${idStr}` }]
+              // 3. Botones en una sola línea
+              [
+                { text: "¿De qué trata este grupo?", callback_data: `que_hacer_${idStr}` },
+                { text: "📖 Reglamento", callback_data: `show_full_rules_${idStr}` }
+              ]
             ] 
           }
         });
+
+        // Guardar ID para futura referencia
+        mensajesBienvenida[idStr] = sentMsg.message_id;
+
+        // 4. Programar borrado a los 3 minutos (180,000 ms)
+        setTimeout(async () => {
+          try {
+            await ctx.telegram.deleteMessage(idStr, sentMsg.message_id);
+            if (mensajesBienvenida[idStr] === sentMsg.message_id) {
+              delete mensajesBienvenida[idStr];
+            }
+          } catch (e) { console.error("Error al borrar mensaje automático:", e.message); }
+        }, 180000);
       }
     } catch (err) { console.log("Error al procesar ingreso:", err.message); }
   }
 }
-
 // --- EVENTOS ---
 bot.on('chat_join_request', async (ctx) => {
   // Log para depuración: Esto aparecerá en tu consola (o logs del servidor)
