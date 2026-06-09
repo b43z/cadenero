@@ -239,7 +239,7 @@ bot.on('callback_query', async (ctx) => {
     if (data.startsWith("que_hacer_")) {
       const targetChatId = data.split("_")[2];
       const grupo = gruposActivos.get(targetChatId) || { reglamento: 1 };
-      const desc = grupo.reglamento === 1 ? "COTORREO: NO es espacio XXX, HOT ni de Encuentros" : "COTORREO HOT: Espacio para conocer gente HOT.sin morbo pesado";
+      const desc = grupo.reglamento === 1 ? "COTORREO: NO es espacio XXX, HOT ni de Encuentros, platica, bromea, no andes de urgido buscando SEXO" : "COTORREO HOT: Espacio para conocer gente HOT.sin morbo pesado, platica, cotorrea, comparte pero no te pases ni andes de buitre";
       await ctx.answerCbQuery(desc, { show_alert: true });
       return;
     }
