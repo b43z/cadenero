@@ -327,7 +327,7 @@ bot.command('gban', async (ctx) => {
       gruposAfectados++;
       
       const mensajeGban = `🚨<b>BAN de Federación🚨</b>\n` +
-                          `<code><b>    CANCERBEROS</b></code>\n` +
+                          `<code><b>    CORVUS</b></code>\n` +
                           `👤 Usuario ID: <code>${targetUid}</code>\n` +
                           `🚫 Acción: Baneo Global aplicado.\n` +
                           `📝 Razón: ${razon}`;
@@ -346,7 +346,7 @@ bot.command('gmsg', async (ctx) => {
   const contenido = ctx.message.text.split(" ").slice(1).join(" ");
   if (!contenido) return ctx.reply("⚠️ Uso: /gmsg [Tu mensaje]");
 
-  const mensajeFormateado = `<b>🚨   AVISO OFICIAL   🚨</b>\n<b>FEDERACION CANCERBEROS</b>\n` +
+  const mensajeFormateado = `<b>🚨   AVISO OFICIAL   🚨</b>\n<b>FEDERACION CORVUS</b>\n` +
                             `==========>\n` +
                             `${contenido}\n` +
                             `==========>`;
