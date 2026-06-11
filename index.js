@@ -105,7 +105,6 @@ async function ejecutarKickLocal(ctx, targetChatId, targetUserId) {
 async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
   const idStr = String(chatId);
   if (!gruposAutorizados.has(idStr)) return;
-  const mention = `<a href="tg://user?id=${user.id}">${user.first_name}</a>`;
 
   if (nombreInvalido(user.first_name)) {
     try {
@@ -127,22 +126,22 @@ async function evaluarSolicitud(ctx, user, chatId, grupoNombre) {
           } catch (e) { /* El mensaje ya pudo haber sido borrado o es viejo */ }
         }
 
-        // 2. Enviar nuevo mensaje
-const sentMsg = await ctx.telegram.sendMessage(idStr, 
-  `👋 Bienvenido <a href="tg://user?id=${user.id}">${mention}</a> (ID: <a href="tg://user?id=${user.id}"><code>${user.id}</code></a>) a <b>${grupoNombre}</b>.`, 
-  { 
-    parse_mode: "HTML",
-    reply_markup: { 
-      inline_keyboard: [
-        [{ text: "🚫 Rechazar", callback_data: `bienvenida_ban_${user.id}` }],
-        [
-          { text: "¿De qué trata?", callback_data: `que_hacer_${idStr}` },
-          { text: "📖 Reglamento", callback_data: `show_full_rules_${idStr}` }
-        ]
-      ] 
-    }
-  }
-);
+        // 2. Enviar nuevo mensaje (BLOQUE MODIFICADO PARA ID CLICKEABLE)
+        const sentMsg = await ctx.telegram.sendMessage(idStr, 
+          `👋 Bienvenido <a href="tg://user?id=${user.id}">${user.first_name}</a> (ID: <a href="tg://user?id=${user.id}"><code>${user.id}</code></a>) a <b>${grupoNombre}</b>.`, 
+          { 
+            parse_mode: "HTML",
+            reply_markup: { 
+              inline_keyboard: [
+                [{ text: "🚫 Rechazar", callback_data: `bienvenida_ban_${user.id}` }],
+                [
+                  { text: "¿De qué trata?", callback_data: `que_hacer_${idStr}` },
+                  { text: "📖 Reglamento", callback_data: `show_full_rules_${idStr}` }
+                ]
+              ] 
+            }
+          }
+        );
         // Guardar ID para futura referencia
         mensajesBienvenida[idStr] = sentMsg.message_id;
 
@@ -326,9 +325,10 @@ bot.command('gban', async (ctx) => {
       await ctx.telegram.banChatMember(gId, targetUid);
       gruposAfectados++;
       
+      // Bloque con el ID clickeable actualizado
       const mensajeGban = `🚨<b>BAN de Federación🚨</b>\n` +
                           `<code><b>    C O R V U S</b></code>\n` +
-                          `👤 Usuario ID: <code>${targetUid}</code>\n` +
+                          `👤 Usuario ID: <a href="tg://user?id=${targetUid}"><code>${targetUid}</code></a>\n` +
                           `🚫 Acción: Baneo Global aplicado.\n` +
                           `📝 Razón: ${razon}`;
                           
