@@ -327,7 +327,7 @@ bot.command('gban', async (ctx) => {
       gruposAfectados++;
       
       const mensajeGban = `🚨<b>BAN de Federación🚨</b>\n` +
-                          `<code><b>    CORVUS</b></code>\n` +
+                          `<code><b>    C O R V U S</b></code>\n` +
                           `👤 Usuario ID: <code>${targetUid}</code>\n` +
                           `🚫 Acción: Baneo Global aplicado.\n` +
                           `📝 Razón: ${razon}`;
