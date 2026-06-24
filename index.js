@@ -342,6 +342,7 @@ Comandos administradores:
 
 /gban <reply o user_id> <motivo> - Aplicar GBAN federación
 /addinfo <motivo> - Extrae y guarda datos respondiendo a un mensaje de bot
+/addblacklist - Agregar usuario a blacklist desde mensaje de bot
 /fedmsg - Enviar mensaje de federación a todos los grupos
 
 /addpurpose - Agregar propósito
@@ -361,17 +362,22 @@ Comandos administradores:
   await ctx.reply(helpText);
 });
 
-// --- COMANDO ADDGROUP (LÓGICA GRUPAL SEGURA) ---
+// --- COMANDO ADDGROUP (LÓGICA GRUPAL CON BOTÓN) ---
 bot.command('addgroup', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   
-  // Solicitud en el mismo grupo con force_reply para no obligar a ir a privado
-  await ctx.reply('🔑 Ingresa el password de administración:', {
+  await ctx.reply('Para autorizar este grupo, presiona el botón e ingresa la contraseña:', {
     reply_markup: {
-      force_reply: true,
-      selective: true
+      inline_keyboard: [[ { text: 'Password', callback_data: 'ask_group_password' } ]]
     }
   });
+});
+
+bot.action('ask_group_password', async (ctx) => {
+  if (!ctx.session) ctx.session = {};
+  ctx.session.awaiting = { action: 'addgroup_confirm', chat_id: ctx.chat.id };
+  await ctx.answerCbQuery();
+  await ctx.reply('Por favor, escribe la contraseña para agregar el grupo:');
 });
 
 // --- NUEVO COMANDO: EXTRACTOR DESDE RESPUESTA DE BOTS ---
@@ -417,6 +423,51 @@ bot.command('addinfo', async (ctx) => {
   } catch (e) {
     console.error('Error en addinfo:', e);
     await ctx.reply('Ocurrió un error al intentar registrar los datos en la base de datos.');
+  }
+});
+
+bot.command('addblacklist', async (ctx) => {
+  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  
+  if (!ctx.message.reply_to_message) {
+    return ctx.reply('Debes usar este comando respondiendo al mensaje del otro bot.');
+  }
+
+  const replyText = ctx.message.reply_to_message.text || ctx.message.reply_to_message.caption || '';
+  if (!replyText) {
+    return ctx.reply('El mensaje al que respondiste no contiene texto legible.');
+  }
+
+  // Regex idéntico a addinfo para garantizar consistencia
+  const idMatch = replyText.match(/(?:ID|Id|id):\s*`?(\d+)`?/i) || replyText.match(/(\d+)/);
+  const userMatch = replyText.match(/(?:Username|Usuario|User):\s*@?([A-Za-z0-9_]+)/i);
+  const nameMatch = replyText.match(/(?:Nombre|Name|First Name):\s*([^\n]+)/i);
+
+  if (!idMatch) {
+    return ctx.reply('No se pudo extraer un ID de usuario válido del mensaje.');
+  }
+
+  const targetId = Number(idMatch[1]);
+  const extractedUsername = userMatch ? userMatch[1] : '';
+  const extractedName = nameMatch ? nameMatch[1].trim() : 'Extracted User';
+
+  try {
+    // Inserta en la lista de baneados
+    await runQuery(
+      `INSERT OR REPLACE INTO banned_users(user_id, first_name, last_name, username, reason) VALUES(?, ?, ?, ?, ?)`,
+      [targetId, extractedName, '', extractedUsername, 'Agregado vía addblacklist (extracción)']
+    );
+
+    // Registra en el historial
+    await runQuery(
+      `INSERT INTO user_history(user_id, chat_id, action, note) VALUES(?, ?, ?, ?)`,
+      [targetId, ctx.chat.id, 'add_blacklist', 'Usuario agregado a la blacklist desde mensaje de bot remoto.']
+    );
+
+    await ctx.reply(`✅ Usuario ${targetId} añadido a la BLACKLIST correctamente.\n\n👤 Nombre: ${extractedName}\n🌐 @${extractedUsername || 'No tiene'}`);
+  } catch (e) {
+    console.error('Error en addblacklist:', e);
+    await ctx.reply('Ocurrió un error al intentar registrar al usuario en la blacklist.');
   }
 });
 
@@ -480,33 +531,45 @@ bot.command('delgroup', async (ctx) => {
 
 bot.command('gban', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
-  let targetId = null;
+
+  let userInfo = { id: null, first_name: '', last_name: '', username: '' };
   let reason = 'GBAN federación';
+  const parts = ctx.message.text.split(' ').filter(Boolean);
+
   if (ctx.message.reply_to_message) {
-    targetId = ctx.message.reply_to_message.from.id;
-    const parts = ctx.message.text.split(' ').filter(Boolean);
+    const u = ctx.message.reply_to_message.from;
+    userInfo.id = u.id;
+    userInfo.first_name = u.first_name || '';
+    userInfo.last_name = u.last_name || '';
+    userInfo.username = u.username || '';
     if (parts.length >= 2) reason = parts.slice(1).join(' ');
   } else {
-    const parts = ctx.message.text.split(' ').filter(Boolean);
-    if (parts.length >= 2) targetId = Number(parts[1]);
+    if (parts.length < 2) return ctx.reply('Indica el usuario (responde a su mensaje o usa /gban <id o @username> <motivo>)');
+    const target = parts[1];
     if (parts.length >= 3) reason = parts.slice(2).join(' ');
-  }
-  if (!targetId) return ctx.reply('Indica el usuario (responde a su mensaje o usa /gban <user_id> <motivo>)');
 
-  let userInfo = { id: targetId, first_name: '', last_name: '', username: '' };
-  try {
-    const u = ctx.message.reply_to_message ? ctx.message.reply_to_message.from : null;
-    if (u) {
-      userInfo.first_name = u.first_name || '';
-      userInfo.last_name = u.last_name || '';
-      userInfo.username = u.username || '';
+    if (/^\d+$/.test(target)) {
+      userInfo.id = Number(target);
+    } else {
+      const username = target.startsWith('@') ? target : '@' + target;
+      try {
+        const member = await ctx.telegram.getChatMember(ctx.chat.id, username);
+        userInfo.id = member.user.id;
+        userInfo.first_name = member.user.first_name || '';
+        userInfo.last_name = member.user.last_name || '';
+        userInfo.username = member.user.username || '';
+      } catch (e) {
+        return ctx.reply('No se pudo encontrar al usuario con ese username en este chat.');
+      }
     }
-  } catch (e) { }
+  }
+
+  if (!userInfo.id) return ctx.reply('Error al identificar al usuario.');
 
   await runQuery(`INSERT OR IGNORE INTO banned_users(user_id, first_name, last_name, username, reason) VALUES(?, ?, ?, ?, ?)`, [userInfo.id, userInfo.first_name, userInfo.last_name, userInfo.username, reason]);
 
   const groups = await allQuery(`SELECT chat_id FROM groups WHERE chat_id != ?`, [-1000000000000]);
-  const gbantxt = `🚨GBAN DE FEDERACION CORVUS🚨\n==============================\n👤 ${userInfo.id}\n👦🏻 ${userInfo.first_name || '-'}\n👪 ${userInfo.last_name || '-'}\n🌐 ${userInfo.username ? '@' + userInfo.username : '-'}\n==============================\n⌛️Auto borrado en 5 min ⌛️`;
+  const gbantxt = `🚨GBAN DE FEDERACION CORVUS🚨\n=================\n👤 ${userInfo.id}\n👦🏻 ${userInfo.first_name || '-'}\n👪 ${userInfo.last_name || '-'}\n🌐 ${userInfo.username ? '@' + userInfo.username : '-'}\n==============================\n⌛️Auto borrado en 5 min ⌛️`;
 
   for (const g of groups) {
     try {
@@ -580,13 +643,29 @@ bot.command('resetdb', async (ctx) => {
 
 bot.command('userinfo', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  
   let targetId = null;
-  if (ctx.message.reply_to_message) targetId = ctx.message.reply_to_message.from.id;
-  else {
-    const parts = ctx.message.text.split(' ').filter(Boolean);
-    if (parts.length >= 2) targetId = Number(parts[1]);
+  const parts = ctx.message.text.split(' ').filter(Boolean);
+
+  if (ctx.message.reply_to_message) {
+    targetId = ctx.message.reply_to_message.from.id;
+  } else if (parts.length >= 2) {
+    const input = parts[1];
+    // Si es numérico lo tomamos como ID, si no intentamos resolver el username
+    if (/^\d+$/.test(input)) {
+      targetId = Number(input);
+    } else {
+      try {
+        const username = input.startsWith('@') ? input : '@' + input;
+        const member = await ctx.telegram.getChatMember(ctx.chat.id, username);
+        targetId = member.user.id;
+      } catch (e) {
+        return ctx.reply('No se pudo encontrar al usuario. Verifica el ID o el @username.');
+      }
+    }
   }
-  if (!targetId) return ctx.reply('Uso: /userinfo <user_id> o responde a su mensaje.');
+
+  if (!targetId) return ctx.reply('Uso: /userinfo <user_id o @username> o responde a su mensaje.');
 
   let tgInfo = null;
   try {
@@ -615,13 +694,30 @@ bot.command('userinfo', async (ctx) => {
 
 bot.command('userhistory', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  
   let targetId = null;
-  if (ctx.message.reply_to_message) targetId = ctx.message.reply_to_message.from.id;
-  else {
-    const parts = ctx.message.text.split(' ').filter(Boolean);
-    if (parts.length >= 2) targetId = Number(parts[1]);
+  const parts = ctx.message.text.split(' ').filter(Boolean);
+
+  if (ctx.message.reply_to_message) {
+    targetId = ctx.message.reply_to_message.from.id;
+  } else if (parts.length >= 2) {
+    const input = parts[1];
+    // Si es numérico lo tomamos como ID, si no intentamos resolver el username
+    if (/^\d+$/.test(input)) {
+      targetId = Number(input);
+    } else {
+      try {
+        const username = input.startsWith('@') ? input : '@' + input;
+        const member = await ctx.telegram.getChatMember(ctx.chat.id, username);
+        targetId = member.user.id;
+      } catch (e) {
+        return ctx.reply('No se pudo encontrar al usuario. Verifica el ID o el @username.');
+      }
+    }
   }
-  if (!targetId) return ctx.reply('Uso: /userhistory <user_id>');
+
+  if (!targetId) return ctx.reply('Uso: /userhistory <user_id o @username> o responde a su mensaje.');
+
   const history = await allQuery(`SELECT action, note, created_at FROM user_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 5`, [targetId]);
   if (!history || history.length === 0) return ctx.reply('No hay historial.');
   const histLines = history.map(h => `${h.created_at} | ${h.action} | ${h.note}`);
@@ -688,25 +784,25 @@ bot.on('message', async (ctx) => {
   try {
     const text = ctx.message.text || '';
 
-    // Manejo de la respuesta al comando /addgroup
-    if (ctx.message.reply_to_message && ctx.message.reply_to_message.text === '🔑 Ingresa el password de administración:') {
-      if (!(await isAdmin(ctx))) return;
-      
-      // Intentar borrar la contraseña y la pregunta por seguridad
-      await ctx.deleteMessage(ctx.message.message_id).catch(() => {});
-      await ctx.deleteMessage(ctx.message.reply_to_message.message_id).catch(() => {});
+    if (!ctx.session || !ctx.session.awaiting) return;
+    const awaiting = ctx.session.awaiting;
 
+    // Lógica para capturar contraseña de addgroup vía botón
+    if (awaiting.action === 'addgroup_confirm') {
+      if (!(await isAdmin(ctx))) {
+        ctx.session.awaiting = null;
+        return;
+      }
+      
       if (text === BOT_PASSWORD) {
         await runQuery(`INSERT OR REPLACE INTO groups(chat_id, title) VALUES(?, ?)`, [ctx.chat.id, ctx.chat.title || 'Grupo']);
         await ctx.reply('✅ Grupo autorizado exitosamente.');
       } else {
         await ctx.reply('❌ Contraseña incorrecta.');
       }
+      ctx.session.awaiting = null;
       return;
     }
-
-    if (!ctx.session || !ctx.session.awaiting) return;
-    const awaiting = ctx.session.awaiting;
 
     if (awaiting.action === 'add_name_rule') {
       try {
@@ -778,7 +874,7 @@ bot.on('message', async (ctx) => {
     }
 
     if (awaiting.action === 'fedmsg') {
-      const fedtxt = `🚨  AVISO OFICIAL  🚨\n🚨FEDERACION CORVUS🚨\n======================\n${text}\n======================\n**Auto borrado en 1 Hora**`;
+      const fedtxt = `🚨  AVISO OFICIAL  🚨\n🚨FEDERACION CORVUS🚨\n==============\n${text}\n=============\n**Auto borrado en 1 Hora**`;
       const groups = await allQuery(`SELECT chat_id FROM groups WHERE chat_id != ?`, [-1000000000000]);
       for (const g of groups) {
         try {
