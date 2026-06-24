@@ -364,12 +364,12 @@ Comandos administradores:
 /requirephoto on|off - Requisito de foto para ingresar
 /config - Modificar configuración rápida del grupo
 
-/addgroup - Agregar grupo a la federación (en privado)
+/addgroup - Agregar este grupo a la federación de forma automática
 /delgroup <nombre> - Borrar grupo autorizado por nombre
 /listgroups - Ver grupos autorizados
 
 /gban <reply o user_id> <motivo> - Aplicar GBAN federación
-/save_from_reply <motivo> - Extrae y guarda datos respondiendo a un bot de info
+/addinfo <motivo> - Extrae y guarda datos respondiendo a un bot de info
 /fedmsg - Enviar mensaje de federación a todos los grupos
 
 /addpurpose - Agregar propósito
@@ -389,7 +389,7 @@ Comandos administradores:
   await ctx.reply(helpText);
 });
 
-// --- NUEVO COMANDO: EXTRACTOR DESDE RESPUESTA DE BOTS ---
+// --- COMANDO ADDINFO: EXTRACTOR DESDE RESPUESTA DE BOTS ---
 bot.command('addinfo', async (ctx) => {
   if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   
@@ -430,7 +430,7 @@ bot.command('addinfo', async (ctx) => {
 
     await ctx.reply(`✅ Datos guardados con éxito en la base de datos de la Federación:\n\n🆔 ID: ${targetId}\n👤 Nombre: ${extractedName}\n🌐 @${extractedUsername || 'No tiene'}\n📝 Motivo: ${reason}`);
   } catch (e) {
-    console.error('Error en save_from_reply:', e);
+    console.error('Error en addinfo:', e);
     await ctx.reply('Ocurrió un error al intentar registrar los datos en la base de datos.');
   }
 });
@@ -476,11 +476,23 @@ bot.command('config', async (ctx) => {
   await ctx.reply('Envíame las configuraciones en líneas separadas, por ejemplo:\nrequire_photo=on\npaused=off\npurpose_id=2');
 });
 
+// --- COMANDO ADDGROUP CON DIÁLOGO REPLY LOCAL Y CAPTURA AUTOMÁTICA DE DATOS ---
 bot.command('addgroup', async (ctx) => {
-  if (ctx.chat.type !== 'private') return ctx.reply('Para agregar un grupo, usa este comando en privado con el bot.');
-  if (!ctx.session) ctx.session = {};
-  ctx.session.awaiting = { action: 'addgroup' };
-  await ctx.reply('Envíame los datos en formato: chat_id|title|password(opcional)\nEjemplo: -1001234567890|Mi Grupo|secreto');
+  if (ctx.chat.type === 'private') {
+    return ctx.reply('❌ Este comando debe ejecutarse dentro del grupo que deseas agregar, no en chat privado.');
+  }
+  
+  if (!(await isAdmin(ctx))) {
+    return ctx.reply('❌ Acción denegada. Solo los administradores pueden registrar este grupo.');
+  }
+
+  // Desplegar cuadro de diálogo directo usando force_reply en el grupo actual
+  await ctx.reply('🔑 Por favor, responde directamente a este mensaje escribiendo la contraseña de administración exclusiva para este grupo:', {
+    reply_markup: {
+      force_reply: true,
+      selective: true
+    }
+  });
 });
 
 bot.command('listgroups', async (ctx) => {
@@ -713,14 +725,39 @@ bot.command('pauseall', async (ctx) => {
   await ctx.reply('Envía la contraseña para pausar todas las funciones del bot.');
 });
 
-// --- Unificación exclusiva de entradas de texto ---
+// --- Manejo unificado de mensajes y capturas automáticas ---
 bot.on('message', async (ctx) => {
   try {
-    if (!ctx.session || !ctx.session.awaiting) return;
-    const awaiting = ctx.session.awaiting;
     const text = ctx.message.text || '';
 
-    // Manejar el inicio de sesión por contraseña primero
+    // INTERCEPCIÓN EXCLUSIVA DE LA RESPUESTA DE CONTRASEÑA EN EL GRUPO (ADDGROUP VIA FORCE_REPLY)
+    if (ctx.message.reply_to_message && ctx.message.reply_to_message.text && ctx.message.reply_to_message.text.includes('🔑 Por favor, responde directamente a este mensaje')) {
+      if (!(await isAdmin(ctx))) {
+        return ctx.reply('❌ No tienes autorización para responder a este comando.');
+      }
+      
+      const passwordInput = text.trim();
+      if (!passwordInput) {
+        return ctx.reply('❌ La contraseña proporcionada no puede estar vacía.');
+      }
+
+      // Extracción 100% automatizada desde el contexto del grupo actual sin inputs manuales del usuario
+      const chat_id = ctx.chat.id;
+      const title = ctx.chat.title || `Grupo ID ${chat_id}`;
+
+      await runQuery(
+        `INSERT OR REPLACE INTO groups(chat_id, title, password) VALUES(?, ?, ?)`, 
+        [chat_id, title, passwordInput]
+      );
+      
+      await ctx.reply(`✅ Grupo registrado de forma automática en la Federación Corvus:\n\n🏢 Nombre: ${title}\n🆔 Chat ID: ${chat_id}\n🔑 Password: Oculto`);
+      return;
+    }
+
+    if (!ctx.session || !ctx.session.awaiting) return;
+    const awaiting = ctx.session.awaiting;
+
+    // Manejar el inicio de sesión por contraseña en chat privado
     if (awaiting.action === 'login_password') {
       if (text === BOT_PASSWORD) {
         ctx.session.authenticated = true;
@@ -743,21 +780,6 @@ bot.on('message', async (ctx) => {
         }
       } catch (e) {
         await ctx.reply('Error al parsear JSON.');
-      }
-      ctx.session.awaiting = null;
-      return;
-    }
-
-    if (awaiting.action === 'addgroup') {
-      const parts = text.split('|').map(s => s.trim());
-      if (parts.length < 2) {
-        await ctx.reply('Formato inválido. Envíame: chat_id|title|password(opcional)');
-      } else {
-        const chat_id = Number(parts[0]);
-        const title = parts[1];
-        const password = parts[2] || '';
-        await runQuery(`INSERT OR REPLACE INTO groups(chat_id, title, password) VALUES(?, ?, ?)`, [chat_id, title, password]);
-        await ctx.reply('Grupo agregado con éxito a la federación.');
       }
       ctx.session.awaiting = null;
       return;
