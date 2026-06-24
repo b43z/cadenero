@@ -506,20 +506,38 @@ bot.command('config', async (ctx) => {
 });
 
 bot.command('listgroups', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
-  const rows = await allQuery(`SELECT idx, chat_id, title, created_at FROM groups ORDER BY idx ASC`);
-  if (!rows || rows.length === 0) return ctx.reply('No hay grupos autorizados.');
-  const lines = rows.map(r => `${r.idx}. ${r.title} (chat_id: ${r.chat_id})`);
-  await ctx.reply(lines.join('\n'));
+  db.all(`SELECT id, title, chat_id FROM groups ORDER BY id ASC`, [], (err, rows) => {
+    if (err) return ctx.reply('Error al obtener la lista de grupos.');
+    if (rows.length === 0) return ctx.reply('No hay grupos registrados.');
+    
+    // Mapeamos el índice visual (i + 1) con el ID real
+    const message = rows.map((row, i) => `${i + 1}. ${row.title} (chat_id: ${row.chat_id})`).join('\n');
+    ctx.reply(`Grupos actuales:\n${message}`);
+  });
 });
 
 bot.command('delgroup', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
-  const parts = ctx.message.text.split(' ').slice(1);
-  if (parts.length === 0) return ctx.reply('Uso: /delgroup <nombre del grupo>');
-  const name = parts.join(' ');
-  await runQuery(`DELETE FROM groups WHERE title = ?`, [name]);
-  await ctx.reply(`Grupo "${name}" eliminado de la federación.`);
+  const args = ctx.message.text.split(' ');
+  const index = parseInt(args[1]);
+
+  if (isNaN(index)) return ctx.reply('Uso: /delgroup <número>');
+  if (index === 1) return ctx.reply('❌ Error: El grupo 1 está protegido y no se puede eliminar.');
+
+  db.all(`SELECT id, title FROM groups ORDER BY id ASC`, [], async (err, rows) => {
+    if (err) return ctx.reply('Error al consultar la base de datos.');
+    
+    const targetRow = rows[index - 1];
+    if (!targetRow) return ctx.reply('❌ Índice no válido. Revisa el número con /listgroups.');
+
+    db.run(`DELETE FROM groups WHERE id = ?`, [targetRow.id], function (err) {
+      if (err) return ctx.reply('Error al ejecutar el borrado.');
+      if (this.changes > 0) {
+        ctx.reply(`✅ Grupo "${targetRow.title}" eliminado correctamente.`);
+      } else {
+        ctx.reply('❌ No se encontró el registro.');
+      }
+    });
+  });
 });
 
 bot.command('gban', async (ctx) => {
@@ -562,7 +580,7 @@ bot.command('gban', async (ctx) => {
   await runQuery(`INSERT OR IGNORE INTO banned_users(user_id, first_name, last_name, username, reason) VALUES(?, ?, ?, ?, ?)`, [userInfo.id, userInfo.first_name, userInfo.last_name, userInfo.username, reason]);
 
   const groups = await allQuery(`SELECT chat_id FROM groups WHERE chat_id != ?`, [-1000000000000]);
-  const gbantxt = `🚨GBAN DE FEDERACION CORVUS🚨\n=================\n👤 ${userInfo.id}\n👦🏻 ${userInfo.first_name || '-'}\n👪 ${userInfo.last_name || '-'}\n🌐 ${userInfo.username ? '@' + userInfo.username : '-'}\n==============================\n⌛️Auto borrado en 5 min ⌛️`;
+  const gbantxt = `🚨GBAN FEDERACION CORVUS🚨\n=================\n👤 ${userInfo.id}\n👦🏻 ${userInfo.first_name || '-'}\n👪 ${userInfo.last_name || '-'}\n🌐 ${userInfo.username ? '@' + userInfo.username : '-'}\n==============================\n⌛️Auto borrado en 5 min ⌛️`;
 
   for (const g of groups) {
     try {
@@ -887,7 +905,7 @@ bot.on('message', async (ctx) => {
 
     // 6. Lógica para fedmsg
     if (awaiting.action === 'fedmsg') {
-      const fedtxt = `🚨  AVISO OFICIAL  🚨\n🚨FEDERACION CORVUS🚨\n==============\n${text}\n=============\n⌛ Auto borrado en 1 Hora`;
+      const fedtxt = `🚨    AVISO OFICIAL    🚨\n🚨FEDERACION CORVUS🚨\n==============\n${text}\n=============\n⌛ Auto borrado en 1 Hora`;
       const groups = await allQuery(`SELECT chat_id FROM groups WHERE chat_id != ?`, [-1000000000000]);
       for (const g of groups) {
         try {
