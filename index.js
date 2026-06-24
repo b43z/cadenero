@@ -329,9 +329,9 @@ Comandos públicos:
 /help - Mostrar esta ayuda
 
 Comandos administradores:
-/add_name_rule - Agregar regla de nombre
-/list_name_rules - Ver reglas de nombres
-/del_name_rule <id> - Borrar regla de nombre
+/addnamerule - Agregar regla de nombre
+/listnamerules - Ver reglas de nombres
+/delnamerule <id> - Borrar regla de nombre
 
 /requirephoto on|off - Requisito de foto para ingresar
 /config - Modificar configuración rápida del grupo
@@ -341,7 +341,7 @@ Comandos administradores:
 /listgroups - Ver grupos autorizados
 
 /gban <reply o user_id> <motivo> - Aplicar GBAN federación
-/save_from_reply <motivo> - Extrae y guarda datos respondiendo a un bot de info
+/addinfo <motivo> - Extrae y guarda datos respondiendo a un bot de info
 /fedmsg - Enviar mensaje de federación a todos los grupos
 
 /addpurpose - Agregar propósito
@@ -361,8 +361,8 @@ Comandos administradores:
   await ctx.reply(helpText);
 });
 
-// --- NUEVO COMANDO: EXTRACTOR DESDE RESPUESTA DE BOTS ---
-bot.command('save_from_reply', async (ctx) => {
+// --- COMANDO: EXTRACTOR DESDE RESPUESTA DE BOTS ---
+bot.command('addinfo', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   
   if (!ctx.message.reply_to_message) {
@@ -374,7 +374,6 @@ bot.command('save_from_reply', async (ctx) => {
     return ctx.reply('El mensaje al que respondiste no contiene texto legible.');
   }
 
-  // Expresiones regulares adaptables para GroupHelp / Rose / Any bot
   const idMatch = replyText.match(/(?:ID|Id|id):\s*`?(\d+)`?/i) || replyText.match(/(\d+)/);
   const userMatch = replyText.match(/(?:Username|Usuario|User):\s*@?([A-Za-z0-9_]+)/i);
   const nameMatch = replyText.match(/(?:Nombre|Name|First Name):\s*([^\n]+)/i);
@@ -387,7 +386,6 @@ bot.command('save_from_reply', async (ctx) => {
   const extractedUsername = userMatch ? userMatch[1] : '';
   const extractedName = nameMatch ? nameMatch[1].trim() : 'Extracted User';
 
-  // El texto después del comando se toma como motivo
   const parts = ctx.message.text.split(' ').filter(Boolean);
   const reason = parts.length >= 2 ? parts.slice(1).join(' ') : 'Agregado vía extracción de bot de info';
 
@@ -404,20 +402,20 @@ bot.command('save_from_reply', async (ctx) => {
 
     await ctx.reply(`✅ Datos guardados con éxito en la base de datos de la Federación:\n\n🆔 ID: ${targetId}\n👤 Nombre: ${extractedName}\n🌐 @${extractedUsername || 'No tiene'}\n📝 Motivo: ${reason}`);
   } catch (e) {
-    console.error('Error en save_from_reply:', e);
+    console.error('Error en addinfo:', e);
     await ctx.reply('Ocurrió un error al intentar registrar los datos en la base de datos.');
   }
 });
 
 // --- Comandos administrativos continuación ---
-bot.command('add_name_rule', async (ctx) => {
+bot.command('addnamerule', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   if (!ctx.session) ctx.session = {};
   ctx.session.awaiting = { action: 'add_name_rule', chat_id: ctx.chat.id };
   await ctx.reply('Envíame la regla en formato JSON:\n{"type":"forbidden","pattern":"<regex>","description":"texto"}');
 });
 
-bot.command('list_name_rules', async (ctx) => {
+bot.command('listnamerules', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   const rows = await allQuery(`SELECT id, type, description, pattern, created_at FROM name_rules ORDER BY id ASC`);
   if (!rows || rows.length === 0) return ctx.reply('No hay reglas de nombres definidas.');
@@ -425,10 +423,10 @@ bot.command('list_name_rules', async (ctx) => {
   await ctx.reply(lines.join('\n'));
 });
 
-bot.command('del_name_rule', async (ctx) => {
+bot.command('delnamerule', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   const parts = ctx.message.text.split(' ').filter(Boolean);
-  if (parts.length < 2) return ctx.reply('Uso: /del_name_rule <id>');
+  if (parts.length < 2) return ctx.reply('Uso: /delnamerule <id>');
   const id = Number(parts[1]);
   await runQuery(`DELETE FROM name_rules WHERE id = ?`, [id]);
   await ctx.reply(`Regla ${id} eliminada si existía.`);
@@ -655,14 +653,14 @@ bot.command('rawcounts', async (ctx) => {
   await ctx.reply('Conteo:\n' + results.join('\n'));
 });
 
-bot.command('add_valid_name', async (ctx) => {
+bot.command('addvalidname', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   if (!ctx.session) ctx.session = {};
   ctx.session.awaiting = { action: 'add_name_rule', chat_id: ctx.chat.id };
   await ctx.reply('Envía la regla permitida en JSON: {"type":"allowed","pattern":"<regex>","description":"texto"}');
 });
 
-bot.command('list_valid_names', async (ctx) => {
+bot.command('listvalidnames', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   const rows = await allQuery(`SELECT id, pattern, description FROM name_rules WHERE type = 'allowed' ORDER BY id ASC`);
   if (!rows || rows.length === 0) return ctx.reply('No hay reglas de nombres válidos.');
@@ -670,10 +668,10 @@ bot.command('list_valid_names', async (ctx) => {
   await ctx.reply(lines.join('\n'));
 });
 
-bot.command('del_valid_name', async (ctx) => {
+bot.command('delvalidname', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   const parts = ctx.message.text.split(' ').filter(Boolean);
-  if (parts.length < 2) return ctx.reply('Uso: /del_valid_name <id>');
+  if (parts.length < 2) return ctx.reply('Uso: /delvalidname <id>');
   const id = Number(parts[1]);
   await runQuery(`DELETE FROM name_rules WHERE id = ? AND type = 'allowed'`, [id]);
   await ctx.reply(`Regla válida ${id} eliminada.`);
