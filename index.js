@@ -336,12 +336,12 @@ Comandos administradores:
 /requirephoto on|off - Requisito de foto para ingresar
 /config - Modificar configuración rápida del grupo
 
-/addgroup - Agregar grupo a la federación (en privado)
+/addgroup - Agregar grupo a la federación
 /delgroup <nombre> - Borrar grupo autorizado por nombre
 /listgroups - Ver grupos autorizados
 
 /gban <reply o user_id> <motivo> - Aplicar GBAN federación
-/save_from_reply <motivo> - Extrae y guarda datos respondiendo a un bot de info
+/addinfo <motivo> - Extrae y guarda datos respondiendo a un mensaje de bot
 /fedmsg - Enviar mensaje de federación a todos los grupos
 
 /addpurpose - Agregar propósito
@@ -361,6 +361,19 @@ Comandos administradores:
   await ctx.reply(helpText);
 });
 
+// --- COMANDO ADDGROUP (LÓGICA GRUPAL SEGURA) ---
+bot.command('addgroup', async (ctx) => {
+  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  
+  // Solicitud en el mismo grupo con force_reply para no obligar a ir a privado
+  await ctx.reply('🔑 Ingresa el password de administración:', {
+    reply_markup: {
+      force_reply: true,
+      selective: true
+    }
+  });
+});
+
 // --- NUEVO COMANDO: EXTRACTOR DESDE RESPUESTA DE BOTS ---
 bot.command('addinfo', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
@@ -374,7 +387,6 @@ bot.command('addinfo', async (ctx) => {
     return ctx.reply('El mensaje al que respondiste no contiene texto legible.');
   }
 
-  // Expresiones regulares adaptables para GroupHelp / Rose / Any bot
   const idMatch = replyText.match(/(?:ID|Id|id):\s*`?(\d+)`?/i) || replyText.match(/(\d+)/);
   const userMatch = replyText.match(/(?:Username|Usuario|User):\s*@?([A-Za-z0-9_]+)/i);
   const nameMatch = replyText.match(/(?:Nombre|Name|First Name):\s*([^\n]+)/i);
@@ -387,7 +399,6 @@ bot.command('addinfo', async (ctx) => {
   const extractedUsername = userMatch ? userMatch[1] : '';
   const extractedName = nameMatch ? nameMatch[1].trim() : 'Extracted User';
 
-  // El texto después del comando se toma como motivo
   const parts = ctx.message.text.split(' ').filter(Boolean);
   const reason = parts.length >= 2 ? parts.slice(1).join(' ') : 'Agregado vía extracción de bot de info';
 
@@ -404,12 +415,12 @@ bot.command('addinfo', async (ctx) => {
 
     await ctx.reply(`✅ Datos guardados con éxito en la base de datos de la Federación:\n\n🆔 ID: ${targetId}\n👤 Nombre: ${extractedName}\n🌐 @${extractedUsername || 'No tiene'}\n📝 Motivo: ${reason}`);
   } catch (e) {
-    console.error('Error en save_from_reply:', e);
+    console.error('Error en addinfo:', e);
     await ctx.reply('Ocurrió un error al intentar registrar los datos en la base de datos.');
   }
 });
 
-// --- Comandos administrativos continuación ---
+// --- Comandos administrativos ---
 bot.command('addnamerule', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   if (!ctx.session) ctx.session = {};
@@ -428,7 +439,7 @@ bot.command('listnamerules', async (ctx) => {
 bot.command('delnamerule', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   const parts = ctx.message.text.split(' ').filter(Boolean);
-  if (parts.length < 2) return ctx.reply('Uso: /del_name_rule <id>');
+  if (parts.length < 2) return ctx.reply('Uso: /delnamerule <id>');
   const id = Number(parts[1]);
   await runQuery(`DELETE FROM name_rules WHERE id = ?`, [id]);
   await ctx.reply(`Regla ${id} eliminada si existía.`);
@@ -450,15 +461,6 @@ bot.command('config', async (ctx) => {
   await ctx.reply('Envíame las configuraciones en líneas separadas, por ejemplo:\nrequire_photo=on\npaused=off\npurpose_id=2');
 });
 
-bot.command('addgroup', async (ctx) => {
-  if (ctx.chat.type !== 'private') return ctx.reply('Para agregar un grupo, usa este comando en privado con el bot.');
-  if (!ctx.session) ctx.session = {};
-  ctx.session.awaiting = { action: 'addgroup' };
-  await ctx.reply('Envíame los datos en formato: chat_id|title|password(opcional)\nEjemplo: -1001234567890|Mi Grupo|secreto', {
-    reply_markup: { force_reply: true }
-  });
-});
-
 bot.command('listgroups', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   const rows = await allQuery(`SELECT idx, chat_id, title, created_at FROM groups ORDER BY idx ASC`);
@@ -473,14 +475,6 @@ bot.command('delgroup', async (ctx) => {
   if (parts.length === 0) return ctx.reply('Uso: /delgroup <nombre del grupo>');
   const name = parts.join(' ');
   await runQuery(`DELETE FROM groups WHERE title = ?`, [name]);
-  
-  const groups = await allQuery(`SELECT chat_id, title, password, created_at FROM groups ORDER BY idx ASC`);
-  await runQuery(`DELETE FROM groups`);
-  const insert = db.prepare(`INSERT INTO groups(chat_id, title, password, created_at) VALUES(?, ?, ?, ?)`);
-  for (const g of groups) {
-    insert.run(g.chat_id, g.title, g.password || '', g.created_at || null);
-  }
-  insert.finalize();
   await ctx.reply(`Grupo "${name}" eliminado de la federación.`);
 });
 
@@ -692,15 +686,33 @@ bot.command('pauseall', async (ctx) => {
 // --- Unificación exclusiva de entradas de texto ---
 bot.on('message', async (ctx) => {
   try {
+    const text = ctx.message.text || '';
+
+    // Manejo de la respuesta al comando /addgroup
+    if (ctx.message.reply_to_message && ctx.message.reply_to_message.text === '🔑 Ingresa el password de administración:') {
+      if (!(await isAdmin(ctx))) return;
+      
+      // Intentar borrar la contraseña y la pregunta por seguridad
+      await ctx.deleteMessage(ctx.message.message_id).catch(() => {});
+      await ctx.deleteMessage(ctx.message.reply_to_message.message_id).catch(() => {});
+
+      if (text === BOT_PASSWORD) {
+        await runQuery(`INSERT OR REPLACE INTO groups(chat_id, title) VALUES(?, ?)`, [ctx.chat.id, ctx.chat.title || 'Grupo']);
+        await ctx.reply('✅ Grupo autorizado exitosamente.');
+      } else {
+        await ctx.reply('❌ Contraseña incorrecta.');
+      }
+      return;
+    }
+
     if (!ctx.session || !ctx.session.awaiting) return;
     const awaiting = ctx.session.awaiting;
-    const text = ctx.message.text || '';
 
     if (awaiting.action === 'add_name_rule') {
       try {
         const obj = JSON.parse(text);
         if (!obj.type || !obj.pattern) {
-          await ctx.reply('JSON inválido. Debe contener type y pattern.');
+          await ctx.reply('JSON inválido.');
         } else {
           await runQuery(`INSERT INTO name_rules(type, pattern, description) VALUES(?, ?, ?)`, [obj.type, obj.pattern, obj.description || '']);
           await ctx.reply('Regla agregada correctamente.');
@@ -712,29 +724,10 @@ bot.on('message', async (ctx) => {
       return;
     }
 
-    if (awaiting.action === 'addgroup') {
-      try {
-        await ctx.deleteMessage(ctx.message.message_id).catch(() => {});
-      } catch (err) { }
-
-      const parts = text.split('|').map(s => s.trim());
-      if (parts.length < 2) {
-        await ctx.reply('Formato inválido. Envíame: chat_id|title|password(opcional)');
-      } else {
-        const chat_id = Number(parts[0]);
-        const title = parts[1];
-        const password = parts[2] || '';
-        await runQuery(`INSERT OR REPLACE INTO groups(chat_id, title, password) VALUES(?, ?, ?)`, [chat_id, title, password]);
-        await ctx.reply('Grupo agregado con éxito a la federación.');
-      }
-      ctx.session.awaiting = null;
-      return;
-    }
-
     if (awaiting.action === 'addpurpose') {
       const purpose = text.trim();
       if (purpose.length === 0 || purpose.length > 60) {
-        await ctx.reply('Propósito inválido. Debe tener entre 1 y 60 caracteres.');
+        await ctx.reply('Propósito inválido.');
       } else {
         await runQuery(`INSERT INTO purposes(purpose) VALUES(?)`, [purpose]);
         await ctx.reply('Propósito agregado.');
@@ -747,7 +740,7 @@ bot.on('message', async (ctx) => {
       const chatId = awaiting.chat_id;
       const num = Number(text.trim());
       if (isNaN(num)) {
-        await ctx.reply('Envía el número del propósito (ej: 1).');
+        await ctx.reply('Envía el número del propósito.');
       } else {
         const p = await getQuery(`SELECT id FROM purposes WHERE id = ?`, [num]);
         if (!p) {
@@ -811,7 +804,7 @@ bot.on('message', async (ctx) => {
         initDb();
         await ctx.reply('Bases de datos reseteadas.');
       } else {
-        await ctx.reply('Contraseña incorrecta. Cancelado.');
+        await ctx.reply('Contraseña incorrecta.');
       }
       ctx.session.awaiting = null;
       return;
