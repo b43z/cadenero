@@ -11,7 +11,7 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const DB_PATH = path.join(DATA_DIR, 'federacion_corvus.db');
 const BOT_TOKEN = process.env.BOT_TOKEN;
-const BOT_PASSWORD = process.env.BOT_PASSWORD || ''; // para comandos sensibles si se requiere
+const BOT_PASSWORD = process.env.BOT_PASSWORD || ''; 
 const PORT = process.env.PORT || 3000;
 const WEBHOOK_URL = process.env.WEBHOOK_URL || '';
 const WEBHOOK_SECRET_TOKEN = process.env.WEBHOOK_SECRET_TOKEN || 'corvus_secret';
@@ -28,16 +28,14 @@ bot.use(session());
 const db = new sqlite3.Database(DB_PATH);
 function initDb() {
   db.serialize(() => {
-    // Reglas de nombres (permitidos / no permitidos)
     db.run(`CREATE TABLE IF NOT EXISTS name_rules (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      type TEXT NOT NULL, -- allowed | forbidden
+      type TEXT NOT NULL, 
       pattern TEXT NOT NULL,
       description TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
-    // Usuarios baneados (lista negra)
     db.run(`CREATE TABLE IF NOT EXISTS banned_users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER NOT NULL UNIQUE,
@@ -48,7 +46,6 @@ function initDb() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
-    // Grupos autorizados
     db.run(`CREATE TABLE IF NOT EXISTS groups (
       idx INTEGER PRIMARY KEY AUTOINCREMENT,
       chat_id INTEGER NOT NULL UNIQUE,
@@ -57,14 +54,12 @@ function initDb() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
-    // Propósitos del grupo
     db.run(`CREATE TABLE IF NOT EXISTS purposes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       purpose TEXT NOT NULL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
-    // Configuraciones generales por chat
     db.run(`CREATE TABLE IF NOT EXISTS settings (
       chat_id INTEGER PRIMARY KEY,
       require_photo INTEGER DEFAULT 0,
@@ -75,7 +70,6 @@ function initDb() {
       FOREIGN KEY(purpose_id) REFERENCES purposes(id)
     )`);
 
-    // Historial de usuarios (últimos cambios / eventos)
     db.run(`CREATE TABLE IF NOT EXISTS user_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER,
@@ -85,16 +79,13 @@ function initDb() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
 
-    // Estadísticas simples
     db.run(`CREATE TABLE IF NOT EXISTS stats (
       key TEXT PRIMARY KEY,
       value INTEGER DEFAULT 0
     )`);
 
-    // Inicializar una fila de stats si no existe
     db.run(`INSERT OR IGNORE INTO stats(key, value) VALUES('processed', 0), ('rejected', 0)`);
 
-    // Inicializar un grupo ficticio para evitar DB vacía
     db.get(`SELECT COUNT(*) as c FROM groups`, (err, row) => {
       if (!err && row && row.c === 0) {
         db.run(`INSERT INTO groups(chat_id, title, password) VALUES(?, ?, ?)`, [-1000000000000, 'GRUPO_FICTICIO_CORVUS', ''], () => {
@@ -103,7 +94,6 @@ function initDb() {
       }
     });
 
-    // Inicializar propósitos por defecto si no existen
     db.get(`SELECT COUNT(*) as c FROM purposes`, (err, row) => {
       if (!err && row && row.c === 0) {
         const stm = db.prepare(`INSERT INTO purposes(purpose) VALUES(?)`);
@@ -114,21 +104,17 @@ function initDb() {
       }
     });
 
-    // Reglas básicas de validación por defecto (guardadas como forbidden/allowed)
     db.get(`SELECT COUNT(*) as c FROM name_rules`, (err, row) => {
       if (!err && row && row.c === 0) {
         const insert = db.prepare(`INSERT INTO name_rules(type, pattern, description) VALUES(?, ?, ?)`);
-        // Forbidden patterns (regex strings)
         insert.run('forbidden', '^\\p{Punct}+$', 'Solo símbolos de puntuación');
         insert.run('forbidden', '^[\\p{Emoji}]+$', 'Solo emoji');
         insert.run('forbidden', '^(.)\\1{7,}$', 'Repetición exagerada de un mismo caracter (spam)');
         insert.run('forbidden', '^[A-Za-z]$', 'Una sola letra');
         insert.run('forbidden', '^[A-Za-z]\\p{Emoji}$', 'Una letra + emoji');
-        // Block non-latin scripts (simplified)
         insert.run('forbidden', '[\\p{Script=Cyrl}]', 'Bloquear alfabeto cirílico (ruso)');
         insert.run('forbidden', '[\\p{Script=Hani}]', 'Bloquear chino/japonés');
         insert.run('forbidden', '[\\p{Script=Arabic}]', 'Bloquear árabe');
-        // Allowed patterns
         insert.run('allowed', '^[A-Za-zÀ-ÖØ-öø-ÿ\\-\\s]{2,}$', 'Nombres latinos con espacios o guiones');
         insert.run('allowed', '^[A-Za-z]{2,}\\p{Emoji}$', 'Nombre >3 letras + emoji válido');
         insert.finalize();
@@ -159,7 +145,6 @@ const allQuery = (sql, params = []) => new Promise((resolve, reject) => {
   });
 });
 
-// Comprueba si el usuario es administrador o creador en el chat
 async function isAdmin(ctx, userId = null) {
   try {
     const uid = userId || ctx.from.id;
@@ -172,12 +157,10 @@ async function isAdmin(ctx, userId = null) {
   }
 }
 
-// Incrementar estadística
 function incrStat(key, amount = 1) {
   db.run(`INSERT INTO stats(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = value + ?`, [key, amount, amount]);
 }
 
-// --- Validación de nombres ---
 async function validateName(name) {
   if (!name || typeof name !== 'string') return { ok: false, reason: 'Nombre vacío' };
   const trimmed = name.trim();
@@ -358,6 +341,7 @@ Comandos administradores:
 /listgroups - Ver grupos autorizados
 
 /gban <reply o user_id> <motivo> - Aplicar GBAN federación
+/save_from_reply <motivo> - Extrae y guarda datos respondiendo a un bot de info
 /fedmsg - Enviar mensaje de federación a todos los grupos
 
 /addpurpose - Agregar propósito
@@ -377,7 +361,55 @@ Comandos administradores:
   await ctx.reply(helpText);
 });
 
-// --- Comandos administrativos ---
+// --- NUEVO COMANDO: EXTRACTOR DESDE RESPUESTA DE BOTS ---
+bot.command('save_from_reply', async (ctx) => {
+  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  
+  if (!ctx.message.reply_to_message) {
+    return ctx.reply('Debes usar este comando respondiendo al mensaje de información del otro bot.');
+  }
+
+  const replyText = ctx.message.reply_to_message.text || ctx.message.reply_to_message.caption || '';
+  if (!replyText) {
+    return ctx.reply('El mensaje al que respondiste no contiene texto legible.');
+  }
+
+  // Expresiones regulares adaptables para GroupHelp / Rose / Any bot
+  const idMatch = replyText.match(/(?:ID|Id|id):\s*`?(\d+)`?/i) || replyText.match(/(\d+)/);
+  const userMatch = replyText.match(/(?:Username|Usuario|User):\s*@?([A-Za-z0-9_]+)/i);
+  const nameMatch = replyText.match(/(?:Nombre|Name|First Name):\s*([^\n]+)/i);
+
+  if (!idMatch) {
+    return ctx.reply('No se pudo extraer un ID de usuario válido del mensaje.');
+  }
+
+  const targetId = Number(idMatch[1]);
+  const extractedUsername = userMatch ? userMatch[1] : '';
+  const extractedName = nameMatch ? nameMatch[1].trim() : 'Extracted User';
+
+  // El texto después del comando se toma como motivo
+  const parts = ctx.message.text.split(' ').filter(Boolean);
+  const reason = parts.length >= 2 ? parts.slice(1).join(' ') : 'Agregado vía extracción de bot de info';
+
+  try {
+    await runQuery(
+      `INSERT OR REPLACE INTO banned_users(user_id, first_name, last_name, username, reason) VALUES(?, ?, ?, ?, ?)`,
+      [targetId, extractedName, '', extractedUsername, reason]
+    );
+
+    await runQuery(
+      `INSERT INTO user_history(user_id, chat_id, action, note) VALUES(?, ?, ?, ?)`,
+      [targetId, ctx.chat.id, 'extracted_save', `Guardado desde mensaje de bot remoto. Motivo: ${reason}`]
+    );
+
+    await ctx.reply(`✅ Datos guardados con éxito en la base de datos de la Federación:\n\n🆔 ID: ${targetId}\n👤 Nombre: ${extractedName}\n🌐 @${extractedUsername || 'No tiene'}\n📝 Motivo: ${reason}`);
+  } catch (e) {
+    console.error('Error en save_from_reply:', e);
+    await ctx.reply('Ocurrió un error al intentar registrar los datos en la base de datos.');
+  }
+});
+
+// --- Comandos administrativos continuación ---
 bot.command('add_name_rule', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   if (!ctx.session) ctx.session = {};
@@ -655,16 +687,13 @@ bot.command('pauseall', async (ctx) => {
   await ctx.reply('Envía la contraseña para pausar todas las funciones del bot.');
 });
 
-// ==========================================
-// UNIFICACIÓN EXCLUSIVA DE ENTRADAS DE TEXTO (MESSAGE HANDLER)
-// ==========================================
+// --- Unificación exclusiva de entradas de texto ---
 bot.on('message', async (ctx) => {
   try {
     if (!ctx.session || !ctx.session.awaiting) return;
     const awaiting = ctx.session.awaiting;
     const text = ctx.message.text || '';
 
-    // 1. add_name_rule
     if (awaiting.action === 'add_name_rule') {
       try {
         const obj = JSON.parse(text);
@@ -681,7 +710,6 @@ bot.on('message', async (ctx) => {
       return;
     }
 
-    // 2. addgroup (interactivo)
     if (awaiting.action === 'addgroup') {
       const parts = text.split('|').map(s => s.trim());
       if (parts.length < 2) {
@@ -697,7 +725,6 @@ bot.on('message', async (ctx) => {
       return;
     }
 
-    // 3. addpurpose
     if (awaiting.action === 'addpurpose') {
       const purpose = text.trim();
       if (purpose.length === 0 || purpose.length > 60) {
@@ -710,7 +737,6 @@ bot.on('message', async (ctx) => {
       return;
     }
 
-    // 4. setpurpose
     if (awaiting.action === 'setpurpose') {
       const chatId = awaiting.chat_id;
       const num = Number(text.trim());
@@ -729,7 +755,6 @@ bot.on('message', async (ctx) => {
       return;
     }
 
-    // 5. config
     if (awaiting.action === 'config') {
       const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
       const chatId = awaiting.chat_id;
@@ -753,7 +778,6 @@ bot.on('message', async (ctx) => {
       return;
     }
 
-    // 6. fedmsg
     if (awaiting.action === 'fedmsg') {
       const fedtxt = `🚨  AVISO OFICIAL  🚨\n🚨FEDERACION CORVUS🚨\n======================\n${text}\n======================\n**Auto borrado en 1 Hora**`;
       const groups = await allQuery(`SELECT chat_id FROM groups WHERE chat_id != ?`, [-1000000000000]);
@@ -770,7 +794,6 @@ bot.on('message', async (ctx) => {
       return;
     }
 
-    // 7. resetdb_confirm
     if (awaiting.action === 'resetdb_confirm') {
       if (text === BOT_PASSWORD) {
         await runQuery(`DELETE FROM name_rules`);
@@ -788,7 +811,6 @@ bot.on('message', async (ctx) => {
       return;
     }
 
-    // 8. pauseall_confirm
     if (awaiting.action === 'pauseall_confirm') {
       if (text === BOT_PASSWORD) {
         await runQuery(`UPDATE settings SET paused = 1`);
