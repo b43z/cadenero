@@ -329,9 +329,9 @@ Comandos públicos:
 /help - Mostrar esta ayuda
 
 Comandos administradores:
-/add_name_rule - Agregar regla de nombre
-/list_name_rules - Ver reglas de nombres
-/del_name_rule <id> - Borrar regla de nombre
+/addnamerule - Agregar regla de nombre
+/listnamerules - Ver reglas de nombres
+/delnamerule <id> - Borrar regla de nombre
 
 /requirephoto on|off - Requisito de foto para ingresar
 /config - Modificar configuración rápida del grupo
@@ -640,26 +640,36 @@ bot.command('userinfo', async (ctx) => {
   let targetId = null;
   const parts = ctx.message.text.split(' ').filter(Boolean);
 
+  // 1. Identificar el targetId
   if (ctx.message.reply_to_message) {
     targetId = ctx.message.reply_to_message.from.id;
   } else if (parts.length >= 2) {
-    const input = parts[1];
-    // Si es numérico lo tomamos como ID, si no intentamos resolver el username
+    const input = parts[1].replace('@', ''); // Limpiamos el @
+    
     if (/^\d+$/.test(input)) {
+      // Si es numérico, es un ID
       targetId = Number(input);
     } else {
-      try {
-        const username = input.startsWith('@') ? input : '@' + input;
-        const member = await ctx.telegram.getChatMember(ctx.chat.id, username);
-        targetId = member.user.id;
-      } catch (e) {
-        return ctx.reply('No se pudo encontrar al usuario. Verifica el ID o el @username.');
+      // Si es texto, buscamos primero en la base de datos (banned_users)
+      const dbUser = await getQuery(`SELECT user_id FROM banned_users WHERE username = ? OR username = ?`, [input, '@' + input]);
+      if (dbUser) {
+        targetId = dbUser.user_id;
+      } else {
+        // Fallback: intentar resolver vía Telegram (solo funciona si está en el chat)
+        try {
+          const username = input.startsWith('@') ? input : '@' + input;
+          const member = await ctx.telegram.getChatMember(ctx.chat.id, username);
+          targetId = member.user.id;
+        } catch (e) {
+          return ctx.reply('No se pudo encontrar al usuario. No está en la base de datos ni en este chat.');
+        }
       }
     }
   }
 
   if (!targetId) return ctx.reply('Uso: /userinfo <user_id o @username> o responde a su mensaje.');
 
+  // 2. Obtener info de Telegram (si es posible) y de la DB
   let tgInfo = null;
   try {
     tgInfo = await ctx.telegram.getChatMember(ctx.chat.id, targetId).catch(() => null);
@@ -668,18 +678,20 @@ bot.command('userinfo', async (ctx) => {
   const dbUser = await getQuery(`SELECT * FROM banned_users WHERE user_id = ?`, [targetId]);
   const history = await allQuery(`SELECT action, note, created_at FROM user_history WHERE user_id = ? ORDER BY created_at DESC LIMIT 5`, [targetId]);
 
+  // 3. Formatear y enviar respuesta
   const lines = [
     `👤 ID: ${targetId}`,
-    `👦🏻 Nombre: ${tgInfo && tgInfo.user ? (tgInfo.user.first_name || '-') : (dbUser ? dbUser.first_name || '-' : '-')}`,
-    `👪 Apellido: ${tgInfo && tgInfo.user ? (tgInfo.user.last_name || '-') : (dbUser ? dbUser.last_name || '-' : '-')}`,
-    `🌐 Username: ${tgInfo && tgInfo.user ? (tgInfo.user.username ? '@' + tgInfo.user.username : '-') : (dbUser && dbUser.username ? '@' + dbUser.username : '-')}`,
-    `📅 Último registro: ${history && history.length ? history[0].created_at : '-'}`,
-    `📝 Motivo: ${dbUser && dbUser.reason ? dbUser.reason : '-'}`,
+    `👦🏻 Nombre: ${tgInfo?.user?.first_name || dbUser?.first_name || '-'}`,
+    `👪 Apellido: ${tgInfo?.user?.last_name || dbUser?.last_name || '-'}`,
+    `🌐 Username: ${tgInfo?.user?.username ? '@' + tgInfo.user.username : (dbUser?.username ? '@' + dbUser.username : '-')}`,
+    `📅 Último registro: ${history?.[0]?.created_at || '-'}`,
+    `📝 Motivo (DB): ${dbUser?.reason || '-'}`,
     `Alertas/Bloqueos: ${dbUser ? 'Sí' : 'No'}`
   ];
+  
   await ctx.reply(lines.join('\n'));
 
-  if (history && history.length) {
+  if (history && history.length > 0) {
     const histLines = history.map(h => `${h.created_at} | ${h.action} | ${h.note}`);
     await ctx.reply('Historial (últimos 5):\n' + histLines.join('\n'));
   }
