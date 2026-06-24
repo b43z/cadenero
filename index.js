@@ -362,27 +362,15 @@ Comandos administradores:
   await ctx.reply(helpText);
 });
 
-// --- COMANDO ADDGROUP (LÓGICA GRUPAL CON BOTÓN) ---
+// --- COMANDO ADDGROUP 
 bot.command('addgroup', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   
-  await ctx.reply('Para autorizar este grupo, presiona el botón e ingresa la contraseña:', {
-    reply_markup: {
-      inline_keyboard: [[ { text: 'Password', callback_data: 'ask_group_password' } ]]
-    }
-  });
-});
-
-bot.action('ask_group_password', async (ctx) => {
-  // Obtenemos el chat_id desde el mensaje del botón, que es la forma correcta y segura
-  const chatId = ctx.callbackQuery.message.chat.id;
-  
-  console.log('DEBUG: Botón presionado en chat:', chatId); 
-
   if (!ctx.session) ctx.session = {};
-  ctx.session.awaiting = { action: 'addgroup_confirm', chat_id: chatId };
   
-  await ctx.answerCbQuery();
+  // Preparamos la sesión para esperar la respuesta en este mismo chat
+  ctx.session.awaiting = { action: 'addgroup_confirm', chat_id: ctx.chat.id };
+  
   await ctx.reply('Por favor, escribe la contraseña para agregar el grupo:');
 });
 
