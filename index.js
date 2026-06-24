@@ -188,6 +188,34 @@ async function validateName(name) {
   return { ok: true, reason: null };
 }
 
+// --- Middleware Global de Autenticación de Contraseña en Privado ---
+bot.use(async (ctx, next) => {
+  if (ctx.chat && ctx.chat.type === 'private') {
+    if (!ctx.session) ctx.session = {};
+    
+    // Permitir /start libremente
+    if (ctx.message && ctx.message.text && ctx.message.text.startsWith('/start')) {
+      return next();
+    }
+
+    // Verificar si ya está autenticado o si la contraseña global no está configurada
+    if (!BOT_PASSWORD || ctx.session.authenticated === true) {
+      return next();
+    }
+
+    // Si se encuentra respondiendo o enviando datos para el password
+    if (ctx.session.awaiting && ctx.session.awaiting.action === 'login_password') {
+      return next();
+    }
+
+    // De lo contrario, forzar la solicitud de autenticación
+    ctx.session.awaiting = { action: 'login_password' };
+    await ctx.reply('🔐 Ingrese el password de administración:');
+    return;
+  }
+  return next();
+});
+
 // --- Manejo de chat_join_request ---
 bot.on('chat_join_request', async (ctx) => {
   try {
@@ -329,9 +357,9 @@ Comandos públicos:
 /help - Mostrar esta ayuda
 
 Comandos administradores:
-/addnamerule - Agregar regla de nombre
-/listnamerules - Ver reglas de nombres
-/delnamerule <id> - Borrar regla de nombre
+/add_name_rule - Agregar regla de nombre
+/list_name_rules - Ver reglas de nombres
+/del_name_rule <id> - Borrar regla de nombre
 
 /requirephoto on|off - Requisito de foto para ingresar
 /config - Modificar configuración rápida del grupo
@@ -341,7 +369,7 @@ Comandos administradores:
 /listgroups - Ver grupos autorizados
 
 /gban <reply o user_id> <motivo> - Aplicar GBAN federación
-/addinfo <motivo> - Extrae y guarda datos respondiendo a un bot de info
+/save_from_reply <motivo> - Extrae y guarda datos respondiendo a un bot de info
 /fedmsg - Enviar mensaje de federación a todos los grupos
 
 /addpurpose - Agregar propósito
@@ -361,9 +389,9 @@ Comandos administradores:
   await ctx.reply(helpText);
 });
 
-// --- COMANDO: EXTRACTOR DESDE RESPUESTA DE BOTS ---
+// --- NUEVO COMANDO: EXTRACTOR DESDE RESPUESTA DE BOTS ---
 bot.command('addinfo', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   
   if (!ctx.message.reply_to_message) {
     return ctx.reply('Debes usar este comando respondiendo al mensaje de información del otro bot.');
@@ -402,21 +430,21 @@ bot.command('addinfo', async (ctx) => {
 
     await ctx.reply(`✅ Datos guardados con éxito en la base de datos de la Federación:\n\n🆔 ID: ${targetId}\n👤 Nombre: ${extractedName}\n🌐 @${extractedUsername || 'No tiene'}\n📝 Motivo: ${reason}`);
   } catch (e) {
-    console.error('Error en addinfo:', e);
+    console.error('Error en save_from_reply:', e);
     await ctx.reply('Ocurrió un error al intentar registrar los datos en la base de datos.');
   }
 });
 
 // --- Comandos administrativos continuación ---
 bot.command('addnamerule', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   if (!ctx.session) ctx.session = {};
   ctx.session.awaiting = { action: 'add_name_rule', chat_id: ctx.chat.id };
   await ctx.reply('Envíame la regla en formato JSON:\n{"type":"forbidden","pattern":"<regex>","description":"texto"}');
 });
 
 bot.command('listnamerules', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   const rows = await allQuery(`SELECT id, type, description, pattern, created_at FROM name_rules ORDER BY id ASC`);
   if (!rows || rows.length === 0) return ctx.reply('No hay reglas de nombres definidas.');
   const lines = rows.map(r => `${r.id} | ${r.type.toUpperCase()} | ${r.description || ''} | ${r.pattern}`);
@@ -424,16 +452,16 @@ bot.command('listnamerules', async (ctx) => {
 });
 
 bot.command('delnamerule', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   const parts = ctx.message.text.split(' ').filter(Boolean);
-  if (parts.length < 2) return ctx.reply('Uso: /delnamerule <id>');
+  if (parts.length < 2) return ctx.reply('Uso: /del_name_rule <id>');
   const id = Number(parts[1]);
   await runQuery(`DELETE FROM name_rules WHERE id = ?`, [id]);
   await ctx.reply(`Regla ${id} eliminada si existía.`);
 });
 
 bot.command('requirephoto', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   const parts = ctx.message.text.split(' ').filter(Boolean);
   if (parts.length < 2) return ctx.reply('Uso: /requirephoto on|off');
   const val = parts[1].toLowerCase() === 'on' ? 1 : 0;
@@ -442,7 +470,7 @@ bot.command('requirephoto', async (ctx) => {
 });
 
 bot.command('config', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   if (!ctx.session) ctx.session = {};
   ctx.session.awaiting = { action: 'config', chat_id: ctx.chat.id };
   await ctx.reply('Envíame las configuraciones en líneas separadas, por ejemplo:\nrequire_photo=on\npaused=off\npurpose_id=2');
@@ -456,7 +484,7 @@ bot.command('addgroup', async (ctx) => {
 });
 
 bot.command('listgroups', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   const rows = await allQuery(`SELECT idx, chat_id, title, created_at FROM groups ORDER BY idx ASC`);
   if (!rows || rows.length === 0) return ctx.reply('No hay grupos autorizados.');
   const lines = rows.map(r => `${r.idx}. ${r.title} (chat_id: ${r.chat_id})`);
@@ -464,7 +492,7 @@ bot.command('listgroups', async (ctx) => {
 });
 
 bot.command('delgroup', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   const parts = ctx.message.text.split(' ').slice(1);
   if (parts.length === 0) return ctx.reply('Uso: /delgroup <nombre del grupo>');
   const name = parts.join(' ');
@@ -481,7 +509,7 @@ bot.command('delgroup', async (ctx) => {
 });
 
 bot.command('gban', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   let targetId = null;
   let reason = 'GBAN federación';
   if (ctx.message.reply_to_message) {
@@ -523,14 +551,14 @@ bot.command('gban', async (ctx) => {
 });
 
 bot.command('fedmsg', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   if (!ctx.session) ctx.session = {};
   ctx.session.awaiting = { action: 'fedmsg', chat_id: ctx.chat.id };
   await ctx.reply('Envíame el comunicado oficial que se enviará a todos los grupos afiliados.');
 });
 
 bot.command('addpurpose', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   if (!ctx.session) ctx.session = {};
   ctx.session.awaiting = { action: 'addpurpose' };
   await ctx.reply('Envíame el texto del propósito (máx 60 caracteres).');
@@ -544,7 +572,7 @@ bot.command('listpurposes', async (ctx) => {
 });
 
 bot.command('delpurpose', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   const parts = ctx.message.text.split(' ').filter(Boolean);
   if (parts.length < 2) return ctx.reply('Uso: /delpurpose <id>');
   const id = Number(parts[1]);
@@ -553,7 +581,7 @@ bot.command('delpurpose', async (ctx) => {
 });
 
 bot.command('setpurpose', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   const rows = await allQuery(`SELECT id, purpose FROM purposes ORDER BY id ASC`);
   if (!rows || rows.length === 0) return ctx.reply('No hay propósitos definidos.');
   const lines = rows.map(r => `${r.id}.- ${r.purpose}`);
@@ -563,7 +591,7 @@ bot.command('setpurpose', async (ctx) => {
 });
 
 bot.command('resetdb', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   if (BOT_PASSWORD) {
     if (!ctx.session) ctx.session = {};
     ctx.session.awaiting = { action: 'resetdb_confirm' };
@@ -581,7 +609,7 @@ bot.command('resetdb', async (ctx) => {
 });
 
 bot.command('userinfo', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   let targetId = null;
   if (ctx.message.reply_to_message) targetId = ctx.message.reply_to_message.from.id;
   else {
@@ -616,7 +644,7 @@ bot.command('userinfo', async (ctx) => {
 });
 
 bot.command('userhistory', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   let targetId = null;
   if (ctx.message.reply_to_message) targetId = ctx.message.reply_to_message.from.id;
   else {
@@ -631,19 +659,19 @@ bot.command('userhistory', async (ctx) => {
 });
 
 bot.command('pausebot', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   await runQuery(`INSERT OR REPLACE INTO settings(chat_id, paused) VALUES(?, ?)`, [ctx.chat.id, 1]);
   await ctx.reply('Bot pausado en este chat.');
 });
 
 bot.command('resumebot', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   await runQuery(`INSERT OR REPLACE INTO settings(chat_id, paused) VALUES(?, ?)`, [ctx.chat.id, 0]);
   await ctx.reply('Bot reanudado.');
 });
 
 bot.command('rawcounts', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   const tables = ['name_rules', 'banned_users', 'groups', 'purposes', 'settings', 'user_history', 'stats'];
   const results = [];
   for (const t of tables) {
@@ -654,14 +682,14 @@ bot.command('rawcounts', async (ctx) => {
 });
 
 bot.command('addvalidname', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   if (!ctx.session) ctx.session = {};
   ctx.session.awaiting = { action: 'add_name_rule', chat_id: ctx.chat.id };
   await ctx.reply('Envía la regla permitida en JSON: {"type":"allowed","pattern":"<regex>","description":"texto"}');
 });
 
 bot.command('listvalidnames', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   const rows = await allQuery(`SELECT id, pattern, description FROM name_rules WHERE type = 'allowed' ORDER BY id ASC`);
   if (!rows || rows.length === 0) return ctx.reply('No hay reglas de nombres válidos.');
   const lines = rows.map(r => `${r.id} | ${r.pattern} | ${r.description || ''}`);
@@ -669,7 +697,7 @@ bot.command('listvalidnames', async (ctx) => {
 });
 
 bot.command('delvalidname', async (ctx) => {
-  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (ctx.chat.type !== 'private' && !(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   const parts = ctx.message.text.split(' ').filter(Boolean);
   if (parts.length < 2) return ctx.reply('Uso: /delvalidname <id>');
   const id = Number(parts[1]);
@@ -691,6 +719,18 @@ bot.on('message', async (ctx) => {
     if (!ctx.session || !ctx.session.awaiting) return;
     const awaiting = ctx.session.awaiting;
     const text = ctx.message.text || '';
+
+    // Manejar el inicio de sesión por contraseña primero
+    if (awaiting.action === 'login_password') {
+      if (text === BOT_PASSWORD) {
+        ctx.session.authenticated = true;
+        ctx.session.awaiting = null;
+        await ctx.reply('🔓 Acceso concedido de forma exitosa. Ya puedes usar los comandos de administración.');
+      } else {
+        await ctx.reply('❌ Contraseña incorrecta. Inténtalo de nuevo:\n🔐 Ingrese el password de administración:');
+      }
+      return;
+    }
 
     if (awaiting.action === 'add_name_rule') {
       try {
