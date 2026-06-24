@@ -362,16 +362,16 @@ Comandos administradores:
   await ctx.reply(helpText);
 });
 
-// --- COMANDO ADDGROUP 
 bot.command('addgroup', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   
   if (!ctx.session) ctx.session = {};
-  
-  // Preparamos la sesión para esperar la respuesta en este mismo chat
   ctx.session.awaiting = { action: 'addgroup_confirm', chat_id: ctx.chat.id };
   
-  await ctx.reply('Por favor, escribe la contraseña para agregar el grupo:');
+  // 'force_reply: true' es lo que abre el cuadro de respuesta como en la imagen
+  await ctx.reply('Escribe la contraseña para agregar el grupo:', {
+    reply_markup: { force_reply: true }
+  });
 });
 
 // --- NUEVO COMANDO: EXTRACTOR DESDE RESPUESTA DE BOTS ---
@@ -387,12 +387,13 @@ bot.command('addinfo', async (ctx) => {
     return ctx.reply('El mensaje al que respondiste no contiene texto legible.');
   }
 
-  const idMatch = replyText.match(/(?:ID|Id|id):\s*`?(\d+)`?/i) || replyText.match(/(\d+)/);
+  // Extrae solo si existe el prefijo ID: o Id:
+  const idMatch = replyText.match(/(?:ID|Id|id):\s*`?(\d+)`?/i);
   const userMatch = replyText.match(/(?:Username|Usuario|User):\s*@?([A-Za-z0-9_]+)/i);
   const nameMatch = replyText.match(/(?:Nombre|Name|First Name):\s*([^\n]+)/i);
 
   if (!idMatch) {
-    return ctx.reply('No se pudo extraer un ID de usuario válido del mensaje.');
+    return ctx.reply('No se encontró un ID válido (debe tener formato "ID: 12345").');
   }
 
   const targetId = Number(idMatch[1]);
@@ -432,13 +433,13 @@ bot.command('addblacklist', async (ctx) => {
     return ctx.reply('El mensaje al que respondiste no contiene texto legible.');
   }
 
-  // Regex idéntico a addinfo para garantizar consistencia
-  const idMatch = replyText.match(/(?:ID|Id|id):\s*`?(\d+)`?/i) || replyText.match(/(\d+)/);
+  // Extrae solo si existe el prefijo ID: o Id:
+  const idMatch = replyText.match(/(?:ID|Id|id):\s*`?(\d+)`?/i);
   const userMatch = replyText.match(/(?:Username|Usuario|User):\s*@?([A-Za-z0-9_]+)/i);
   const nameMatch = replyText.match(/(?:Nombre|Name|First Name):\s*([^\n]+)/i);
 
   if (!idMatch) {
-    return ctx.reply('No se pudo extraer un ID de usuario válido del mensaje.');
+    return ctx.reply('No se encontró un ID válido (debe tener formato "ID: 12345").');
   }
 
   const targetId = Number(idMatch[1]);
@@ -446,13 +447,11 @@ bot.command('addblacklist', async (ctx) => {
   const extractedName = nameMatch ? nameMatch[1].trim() : 'Extracted User';
 
   try {
-    // Inserta en la lista de baneados
     await runQuery(
       `INSERT OR REPLACE INTO banned_users(user_id, first_name, last_name, username, reason) VALUES(?, ?, ?, ?, ?)`,
       [targetId, extractedName, '', extractedUsername, 'Agregado vía addblacklist (extracción)']
     );
 
-    // Registra en el historial
     await runQuery(
       `INSERT INTO user_history(user_id, chat_id, action, note) VALUES(?, ?, ?, ?)`,
       [targetId, ctx.chat.id, 'add_blacklist', 'Usuario agregado a la blacklist desde mensaje de bot remoto.']
@@ -777,17 +776,20 @@ bot.command('pauseall', async (ctx) => {
 bot.on('message', async (ctx) => {
   try {
     const text = ctx.message.text || '';
+    if (!ctx.session) ctx.session = {};
+    if (!ctx.session.awaiting) return;
 
-    if (!ctx.session || !ctx.session.awaiting) return;
     const awaiting = ctx.session.awaiting;
 
-    // Lógica para capturar contraseña de addgroup vía botón
+    // 1. Lógica para procesar la contraseña de addgroup (BORRA MENSAJE)
     if (awaiting.action === 'addgroup_confirm') {
+      await ctx.deleteMessage().catch(() => {}); // Borra la contraseña del usuario
+      
       if (!(await isAdmin(ctx))) {
         ctx.session.awaiting = null;
         return;
       }
-      
+
       if (text === BOT_PASSWORD) {
         await runQuery(`INSERT OR REPLACE INTO groups(chat_id, title) VALUES(?, ?)`, [ctx.chat.id, ctx.chat.title || 'Grupo']);
         await ctx.reply('✅ Grupo autorizado exitosamente.');
@@ -798,52 +800,56 @@ bot.on('message', async (ctx) => {
       return;
     }
 
+    // 2. Lógica para procesar add_name_rule
     if (awaiting.action === 'add_name_rule') {
       try {
         const obj = JSON.parse(text);
         if (!obj.type || !obj.pattern) {
-          await ctx.reply('JSON inválido.');
+          await ctx.reply('❌ JSON inválido.');
         } else {
           await runQuery(`INSERT INTO name_rules(type, pattern, description) VALUES(?, ?, ?)`, [obj.type, obj.pattern, obj.description || '']);
-          await ctx.reply('Regla agregada correctamente.');
+          await ctx.reply('✅ Regla agregada correctamente.');
         }
       } catch (e) {
-        await ctx.reply('Error al parsear JSON.');
+        await ctx.reply('❌ Error al parsear JSON.');
       }
       ctx.session.awaiting = null;
       return;
     }
 
+    // 3. Lógica para addpurpose
     if (awaiting.action === 'addpurpose') {
       const purpose = text.trim();
       if (purpose.length === 0 || purpose.length > 60) {
-        await ctx.reply('Propósito inválido.');
+        await ctx.reply('❌ Propósito inválido (máx 60 caracteres).');
       } else {
         await runQuery(`INSERT INTO purposes(purpose) VALUES(?)`, [purpose]);
-        await ctx.reply('Propósito agregado.');
+        await ctx.reply('✅ Propósito agregado.');
       }
       ctx.session.awaiting = null;
       return;
     }
 
+    // 4. Lógica para setpurpose
     if (awaiting.action === 'setpurpose') {
       const chatId = awaiting.chat_id;
       const num = Number(text.trim());
       if (isNaN(num)) {
-        await ctx.reply('Envía el número del propósito.');
+        await ctx.reply('❌ Envía el número del propósito.');
       } else {
         const p = await getQuery(`SELECT id FROM purposes WHERE id = ?`, [num]);
         if (!p) {
-          await ctx.reply('Propósito no encontrado.');
+          await ctx.reply('❌ Propósito no encontrado.');
         } else {
           await runQuery(`INSERT OR REPLACE INTO settings(chat_id, purpose_id) VALUES(?, ?)`, [chatId, num]);
-          await ctx.reply('Propósito asignado al grupo.');
+          await ctx.reply('✅ Propósito asignado al grupo.');
         }
       }
       ctx.session.awaiting = null;
       return;
     }
 
+    // 5. Lógica para config
     if (awaiting.action === 'config') {
       const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
       const chatId = awaiting.chat_id;
@@ -862,13 +868,14 @@ bot.on('message', async (ctx) => {
           }
         }
       }
-      await ctx.reply('Configuración actualizada.');
+      await ctx.reply('✅ Configuración actualizada.');
       ctx.session.awaiting = null;
       return;
     }
 
+    // 6. Lógica para fedmsg
     if (awaiting.action === 'fedmsg') {
-      const fedtxt = `🚨  AVISO OFICIAL  🚨\n🚨FEDERACION CORVUS🚨\n==============\n${text}\n=============\n**Auto borrado en 1 Hora**`;
+      const fedtxt = `🚨  AVISO OFICIAL  🚨\n🚨FEDERACION CORVUS🚨\n==============\n${text}\n=============\n⌛ Auto borrado en 1 Hora`;
       const groups = await allQuery(`SELECT chat_id FROM groups WHERE chat_id != ?`, [-1000000000000]);
       for (const g of groups) {
         try {
@@ -878,11 +885,12 @@ bot.on('message', async (ctx) => {
           }, 60 * 60 * 1000);
         } catch (e) { }
       }
-      await ctx.reply('Mensaje de federación enviado.');
+      await ctx.reply('✅ Mensaje de federación enviado.');
       ctx.session.awaiting = null;
       return;
     }
 
+    // 7. Lógica para resetdb
     if (awaiting.action === 'resetdb_confirm') {
       if (text === BOT_PASSWORD) {
         await runQuery(`DELETE FROM name_rules`);
@@ -892,20 +900,21 @@ bot.on('message', async (ctx) => {
         await runQuery(`DELETE FROM user_history`);
         await runQuery(`DELETE FROM stats`);
         initDb();
-        await ctx.reply('Bases de datos reseteadas.');
+        await ctx.reply('✅ Bases de datos reseteadas.');
       } else {
-        await ctx.reply('Contraseña incorrecta.');
+        await ctx.reply('❌ Contraseña incorrecta.');
       }
       ctx.session.awaiting = null;
       return;
     }
 
+    // 8. Lógica para pauseall
     if (awaiting.action === 'pauseall_confirm') {
       if (text === BOT_PASSWORD) {
         await runQuery(`UPDATE settings SET paused = 1`);
-        await ctx.reply('Bot pausado globalmente.');
+        await ctx.reply('✅ Bot pausado globalmente.');
       } else {
-        await ctx.reply('Contraseña incorrecta.');
+        await ctx.reply('❌ Contraseña incorrecta.');
       }
       ctx.session.awaiting = null;
       return;
