@@ -506,37 +506,38 @@ bot.command('config', async (ctx) => {
 });
 
 bot.command('listgroups', async (ctx) => {
-  db.all(`SELECT id, title, chat_id FROM groups ORDER BY id ASC`, [], (err, rows) => {
-    if (err) return ctx.reply('Error al obtener la lista de grupos.');
-    if (rows.length === 0) return ctx.reply('No hay grupos registrados.');
-    
-    // Mapeamos el índice visual (i + 1) con el ID real
-    const message = rows.map((row, i) => `${i + 1}. ${row.title} (chat_id: ${row.chat_id})`).join('\n');
-    ctx.reply(`Grupos actuales:\n${message}`);
-  });
+  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  
+  // Se usa 'idx' que es el nombre de la columna en tu tabla
+  const rows = await allQuery(`SELECT idx, chat_id, title, created_at FROM groups ORDER BY idx ASC`);
+  
+  if (!rows || rows.length === 0) return ctx.reply('No hay grupos autorizados.');
+  
+  const lines = rows.map(r => `${r.idx}. ${r.title} (chat_id: ${r.chat_id})`);
+  await ctx.reply(`Grupos autorizados:\n${lines.join('\n')}`);
 });
 
 bot.command('delgroup', async (ctx) => {
-  const args = ctx.message.text.split(' ');
-  const index = parseInt(args[1]);
+  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+
+  const parts = ctx.message.text.split(' ');
+  const index = parseInt(parts[1]);
 
   if (isNaN(index)) return ctx.reply('Uso: /delgroup <número>');
   if (index === 1) return ctx.reply('❌ Error: El grupo 1 está protegido y no se puede eliminar.');
 
-  db.all(`SELECT id, title FROM groups ORDER BY id ASC`, [], async (err, rows) => {
-    if (err) return ctx.reply('Error al consultar la base de datos.');
-    
-    const targetRow = rows[index - 1];
-    if (!targetRow) return ctx.reply('❌ Índice no válido. Revisa el número con /listgroups.');
+  // Buscamos el grupo basándonos en el índice (idx)
+  db.run(`DELETE FROM groups WHERE idx = ?`, [index], function (err) {
+    if (err) {
+      console.error(err);
+      return ctx.reply('Error al intentar eliminar el grupo.');
+    }
 
-    db.run(`DELETE FROM groups WHERE id = ?`, [targetRow.id], function (err) {
-      if (err) return ctx.reply('Error al ejecutar el borrado.');
-      if (this.changes > 0) {
-        ctx.reply(`✅ Grupo "${targetRow.title}" eliminado correctamente.`);
-      } else {
-        ctx.reply('❌ No se encontró el registro.');
-      }
-    });
+    if (this.changes > 0) {
+      ctx.reply(`✅ Grupo con índice ${index} eliminado correctamente.`);
+    } else {
+      ctx.reply(`❌ No se encontró ningún grupo con el índice ${index}.`);
+    }
   });
 });
 
