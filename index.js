@@ -374,8 +374,14 @@ bot.command('addgroup', async (ctx) => {
 });
 
 bot.action('ask_group_password', async (ctx) => {
+  // Obtenemos el chat_id desde el mensaje del botón, que es la forma correcta y segura
+  const chatId = ctx.callbackQuery.message.chat.id;
+  
+  console.log('DEBUG: Botón presionado en chat:', chatId); 
+
   if (!ctx.session) ctx.session = {};
-  ctx.session.awaiting = { action: 'addgroup_confirm', chat_id: ctx.chat.id };
+  ctx.session.awaiting = { action: 'addgroup_confirm', chat_id: chatId };
+  
   await ctx.answerCbQuery();
   await ctx.reply('Por favor, escribe la contraseña para agregar el grupo:');
 });
