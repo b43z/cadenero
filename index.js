@@ -101,7 +101,7 @@ function initDb() {
       if (!err && row && row.c === 0) {
         const stm = db.prepare(`INSERT INTO purposes(purpose) VALUES(?)`);
         stm.run('Pláticas y cotorreo, NO XXX ni encuentros. Evita BAN.');
-        stm.run('Cotorreo HOT y XXX, NO morbo. Conoce gente, disfruta.');
+        stm.run('Cotorreo HOT y XXX, NO morbo. Conocer gente, disfrutar.');
         stm.finalize();
         console.log('Propósitos iniciales creados.');
       }
@@ -248,9 +248,9 @@ bot.on('chat_join_request', async (ctx) => {
     const welcomeText = `Bienvenido ${user.first_name || user.username || ''} a ${req.chat.title}\n\n` +
       (purposeText ? `Propósito: ${purposeText}` : 'Propósito: No definido');
 
+    // Se elimina la fila del botón de Propósito, dejando solo el botón de Rechazo
     const keyboard = [
-      [{ text: 'Propósito', callback_data: `popup_purpose_${chatId}` }],
-      [{ text: 'Rechazo 🚫', callback_data: `manual_reject_${user.id}_${chatId}` }]
+      [{ text: 'Rechazo (solo admid) 🚫', callback_data: `manual_reject_${user.id}_${chatId}` }]
     ];
 
     const sent = await ctx.telegram.sendMessage(chatId, welcomeText, {
@@ -344,7 +344,8 @@ Comandos públicos:
 /help - Mostrar esta ayuda
 
 Comandos administradores:
-/addnamerule - Agregar regla de nombre
+/addnamevalidrule - Agregar regla para ACEPTAR nombres
+/addnamedinval - Agregar regla para RECHAZAR nombres
 /listnamerules - Ver reglas de nombres
 /delnamerule <id> - Borrar regla de nombre
 
@@ -376,6 +377,7 @@ Comandos administradores:
   `;
   await ctx.reply(helpText);
 });
+
 bot.command('addgroup', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   
@@ -479,11 +481,20 @@ bot.command('addblacklist', async (ctx) => {
 });
 
 // --- Comandos administrativos ---
-bot.command('addnamerule', async (ctx) => {
+bot.command('addnamevalidrule', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   if (!ctx.session) ctx.session = {};
-  ctx.session.awaiting = { action: 'add_name_rule', chat_id: ctx.chat.id };
-  await ctx.reply('Envíame la regla en formato JSON:\n{"type":"forbidden","pattern":"<regex>","description":"texto"}');
+  
+  ctx.session.awaiting = { action: 'add_name_valid_rule', chat_id: ctx.chat.id };
+  await ctx.reply('Regla para ACEPTAR nombres.\nEnvíame los datos en formato JSON (el tipo "allowed" se forzará automáticamente):\n\n{"pattern":"^[A-Za-z]{2,}$","description":"Nombres latinos estándar"}');
+});
+
+bot.command('addnamedinval', async (ctx) => {
+  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+  if (!ctx.session) ctx.session = {};
+  
+  ctx.session.awaiting = { action: 'add_name_invalid_rule', chat_id: ctx.chat.id };
+  await ctx.reply('Regla para RECHAZAR nombres.\nEnvíame los datos en formato JSON (el tipo "forbidden" se forzará automáticamente):\n\n{"pattern":"^[0-9]+$","description":"Bloquear nombres que sean solo números"}');
 });
 
 bot.command('listnamerules', async (ctx) => {
@@ -610,7 +621,7 @@ bot.command('gban', async (ctx) => {
   await runQuery(`INSERT OR IGNORE INTO banned_users(user_id, first_name, last_name, username, reason) VALUES(?, ?, ?, ?, ?)`, [userInfo.id, userInfo.first_name, userInfo.last_name, userInfo.username, reason]);
 
   const groups = await allQuery(`SELECT chat_id FROM groups WHERE chat_id != ?`, [-1000000000000]);
-  const gbantxt = `🚨GBAN FEDERACION CORVUS🚨\n=================\n👤 ${userInfo.id}\n👦🏻 ${userInfo.first_name || '-'}\n👪 ${userInfo.last_name || '-'}\n🌐 ${userInfo.username ? '@' + userInfo.username : '-'}\n==============================\n⌛️Auto borrado en 5 min ⌛️`;
+  const gbantxt = `🚨GBAN FEDERACION CORVUS \n=================\n👤 ${userInfo.id}\n👦🏻 ${userInfo.first_name || '-'}\n👪 ${userInfo.last_name || '-'}\n🌐 ${userInfo.username ? '@' + userInfo.username : '-'}\n==============================\n⌛️Auto borrado en 5 min ⌛️`;
 
   for (const g of groups) {
     try {
