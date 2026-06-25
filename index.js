@@ -16,6 +16,9 @@ const PORT = process.env.PORT || 3000;
 const WEBHOOK_URL = process.env.WEBHOOK_URL || '';
 const WEBHOOK_SECRET_TOKEN = process.env.WEBHOOK_SECRET_TOKEN || 'corvus_secret';
 
+// Variable global para rastrear el último mensaje de bienvenida por chat_id
+const lastWelcomeMessages = {};
+
 // --- Inicializar bot ---
 if (!BOT_TOKEN) {
   console.error('ERROR: BOT_TOKEN no definido en variables de entorno.');
@@ -235,6 +238,11 @@ bot.on('chat_join_request', async (ctx) => {
     await runQuery(`INSERT INTO user_history(user_id, chat_id, action, note) VALUES(?, ?, ?, ?)`, [user.id, chatId, 'join_request_approved', 'Validación OK']);
     incrStat('processed', 1);
 
+    // --- Borrado del mensaje anterior para evitar acumulación ---
+    if (lastWelcomeMessages[chatId]) {
+      await ctx.telegram.deleteMessage(chatId, lastWelcomeMessages[chatId]).catch(() => {});
+    }
+
     const purposeRow = await getQuery(`SELECT p.purpose FROM settings s LEFT JOIN purposes p ON s.purpose_id = p.id WHERE s.chat_id = ?`, [chatId]);
     const purposeText = purposeRow && purposeRow.purpose ? purposeRow.purpose : null;
     const welcomeText = `Bienvenido ${user.first_name || user.username || ''} a ${req.chat.title}\n\n` +
@@ -250,9 +258,16 @@ bot.on('chat_join_request', async (ctx) => {
       parse_mode: 'HTML'
     });
 
+    // Guardamos el nuevo ID
+    lastWelcomeMessages[chatId] = sent.message_id;
+
     setTimeout(async () => {
       try {
         await ctx.telegram.deleteMessage(chatId, sent.message_id).catch(() => {});
+        // Limpiamos del diccionario solo si sigue siendo el mismo mensaje
+        if (lastWelcomeMessages[chatId] === sent.message_id) {
+          delete lastWelcomeMessages[chatId];
+        }
       } catch (e) { }
     }, 5 * 60 * 1000);
 
@@ -361,7 +376,6 @@ Comandos administradores:
   `;
   await ctx.reply(helpText);
 });
-
 bot.command('addgroup', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   
@@ -625,6 +639,7 @@ bot.command('addpurpose', async (ctx) => {
 });
 
 bot.command('listpurposes', async (ctx) => {
+  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   const rows = await allQuery(`SELECT id, purpose FROM purposes ORDER BY id ASC`);
   if (!rows || rows.length === 0) return ctx.reply('No hay propósitos definidos.');
   const lines = rows.map(r => `${r.id}.- ${r.purpose}`);
@@ -854,89 +869,62 @@ bot.on('message', async (ctx) => {
           await ctx.reply('❌ JSON inválido.');
         } else {
           await runQuery(`INSERT INTO name_rules(type, pattern, description) VALUES(?, ?, ?)`, [obj.type, obj.pattern, obj.description || '']);
-          await ctx.reply('✅ Regla agregada correctamente.');
+          await ctx.reply('✅ Regla agregada.');
         }
       } catch (e) {
-        await ctx.reply('❌ Error al parsear JSON.');
+        await ctx.reply('❌ Error: Formato JSON inválido.');
       }
       ctx.session.awaiting = null;
       return;
     }
 
-    // 3. Lógica para addpurpose
+    // 3. Lógica para procesar fedmsg
+    if (awaiting.action === 'fedmsg') {
+      const groups = await allQuery(`SELECT chat_id FROM groups WHERE chat_id != ?`, [-1000000000000]);
+      let sentCount = 0;
+      for (const g of groups) {
+        try {
+          await ctx.telegram.sendMessage(g.chat_id, text);
+          sentCount++;
+        } catch (e) { }
+      }
+      await ctx.reply(`✅ Mensaje enviado a ${sentCount} grupos.`);
+      ctx.session.awaiting = null;
+      return;
+    }
+
+    // 4. Lógica para procesar addpurpose
     if (awaiting.action === 'addpurpose') {
-      const purpose = text.trim();
-      if (purpose.length === 0 || purpose.length > 60) {
-        await ctx.reply('❌ Propósito inválido (máx 60 caracteres).');
+      const purposeText = text.trim();
+      if (!purposeText || purposeText.length > 60) {
+        await ctx.reply('❌ Error: El texto no puede estar vacío ni superar los 60 caracteres.');
       } else {
-        await runQuery(`INSERT INTO purposes(purpose) VALUES(?)`, [purpose]);
+        await runQuery(`INSERT INTO purposes(purpose) VALUES(?)`, [purposeText]);
         await ctx.reply('✅ Propósito agregado.');
       }
       ctx.session.awaiting = null;
       return;
     }
 
-    // 4. Lógica para setpurpose
+    // 5. Lógica para procesar setpurpose
     if (awaiting.action === 'setpurpose') {
-      const chatId = awaiting.chat_id;
-      const num = Number(text.trim());
-      if (isNaN(num)) {
-        await ctx.reply('❌ Envía el número del propósito.');
+      const purposeId = Number(text);
+      if (isNaN(purposeId)) {
+        await ctx.reply('❌ Error: ID inválido.');
       } else {
-        const p = await getQuery(`SELECT id FROM purposes WHERE id = ?`, [num]);
+        const p = await getQuery(`SELECT id FROM purposes WHERE id = ?`, [purposeId]);
         if (!p) {
-          await ctx.reply('❌ Propósito no encontrado.');
+          await ctx.reply('❌ Error: ID de propósito no existe.');
         } else {
-          await runQuery(`INSERT OR REPLACE INTO settings(chat_id, purpose_id) VALUES(?, ?)`, [chatId, num]);
-          await ctx.reply('✅ Propósito asignado al grupo.');
+          await runQuery(`INSERT OR REPLACE INTO settings(chat_id, purpose_id) VALUES(?, ?)`, [awaiting.chat_id, purposeId]);
+          await ctx.reply(`✅ Propósito del grupo actualizado.`);
         }
       }
       ctx.session.awaiting = null;
       return;
     }
 
-    // 5. Lógica para config
-    if (awaiting.action === 'config') {
-      const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
-      const chatId = awaiting.chat_id;
-      for (const line of lines) {
-        const [k, v] = line.split('=').map(s => s.trim());
-        if (k === 'require_photo') {
-          const val = (v === 'on' || v === '1' || v === 'true') ? 1 : 0;
-          await runQuery(`INSERT OR REPLACE INTO settings(chat_id, require_photo) VALUES(?, ?)`, [chatId, val]);
-        } else if (k === 'paused') {
-          const val = (v === 'on' || v === '1' || v === 'true') ? 1 : 0;
-          await runQuery(`INSERT OR REPLACE INTO settings(chat_id, paused) VALUES(?, ?)`, [chatId, val]);
-        } else if (k === 'purpose_id') {
-          const pid = Number(v);
-          if (!isNaN(pid)) {
-            await runQuery(`INSERT OR REPLACE INTO settings(chat_id, purpose_id) VALUES(?, ?)`, [chatId, pid]);
-          }
-        }
-      }
-      await ctx.reply('✅ Configuración actualizada.');
-      ctx.session.awaiting = null;
-      return;
-    }
-
-    // 6. Lógica para fedmsg
-    if (awaiting.action === 'fedmsg') {
-      const fedtxt = `🚨    AVISO OFICIAL    🚨\n🚨FEDERACION CORVUS🚨\n==============\n${text}\n=============\n⌛ Auto borrado en 1 Hora`;
-      const groups = await allQuery(`SELECT chat_id FROM groups WHERE chat_id != ?`, [-1000000000000]);
-      for (const g of groups) {
-        try {
-          const sent = await ctx.telegram.sendMessage(g.chat_id, fedtxt);
-          setTimeout(async () => {
-            try { await ctx.telegram.deleteMessage(g.chat_id, sent.message_id).catch(() => {}); } catch (e) {}
-          }, 60 * 60 * 1000);
-        } catch (e) { }
-      }
-      await ctx.reply('✅ Mensaje de federación enviado.');
-      ctx.session.awaiting = null;
-      return;
-    }
-
-    // 7. Lógica para resetdb
+    // 6. Lógica para resetdb_confirm
     if (awaiting.action === 'resetdb_confirm') {
       if (text === BOT_PASSWORD) {
         await runQuery(`DELETE FROM name_rules`);
@@ -954,11 +942,36 @@ bot.on('message', async (ctx) => {
       return;
     }
 
-    // 8. Lógica para pauseall
+    // 7. Lógica para config
+    if (awaiting.action === 'config') {
+      const lines = text.split('\n');
+      for (const line of lines) {
+        const parts = line.split('=');
+        if (parts.length === 2) {
+          const key = parts[0].trim().toLowerCase();
+          const val = parts[1].trim().toLowerCase();
+          if (key === 'require_photo') {
+            await runQuery(`INSERT OR REPLACE INTO settings(chat_id, require_photo) VALUES(?, ?)`, [awaiting.chat_id, val === 'on' ? 1 : 0]);
+          } else if (key === 'paused') {
+            await runQuery(`INSERT OR REPLACE INTO settings(chat_id, paused) VALUES(?, ?)`, [awaiting.chat_id, val === 'on' ? 1 : 0]);
+          } else if (key === 'purpose_id') {
+            await runQuery(`INSERT OR REPLACE INTO settings(chat_id, purpose_id) VALUES(?, ?)`, [awaiting.chat_id, Number(val)]);
+          }
+        }
+      }
+      await ctx.reply('✅ Configuración aplicada.');
+      ctx.session.awaiting = null;
+      return;
+    }
+
+    // 8. Lógica para pauseall_confirm
     if (awaiting.action === 'pauseall_confirm') {
       if (text === BOT_PASSWORD) {
-        await runQuery(`UPDATE settings SET paused = 1`);
-        await ctx.reply('✅ Bot pausado globalmente.');
+        const groups = await allQuery(`SELECT chat_id FROM groups`);
+        for (const g of groups) {
+          await runQuery(`INSERT OR REPLACE INTO settings(chat_id, paused) VALUES(?, ?)`, [g.chat_id, 1]);
+        }
+        await ctx.reply('✅ Todas las funciones en todos los grupos han sido pausadas.');
       } else {
         await ctx.reply('❌ Contraseña incorrecta.');
       }
@@ -967,46 +980,52 @@ bot.on('message', async (ctx) => {
     }
 
   } catch (e) {
-    console.error('Error en message handler:', e);
-    if (ctx.session) ctx.session.awaiting = null;
+    console.error('Error message handler', e);
   }
 });
 
-// --- Finalización y control ---
+// --- Captura de señales para cierre correcto ---
 process.once('SIGINT', () => {
   bot.stop('SIGINT');
   db.close();
   process.exit(0);
 });
+
 process.once('SIGTERM', () => {
   bot.stop('SIGTERM');
   db.close();
   process.exit(0);
 });
 
-// --- Express Server ---
+// --- Iniciar Servidor y Webhook ---
 const app = express();
 app.use(express.json());
-app.get('/', (req, res) => res.send('FEDERACIÓN CORVUS Bot'));
+
+app.get('/', (req, res) => res.send('FEDERACIÓN CORVUS Bot en línea y funcionando.'));
+
 if (WEBHOOK_URL) {
   (async () => {
     try {
       const webhookPath = `/webhook/${WEBHOOK_SECRET_TOKEN}`;
       await bot.telegram.setWebhook(WEBHOOK_URL + webhookPath);
+      console.log(`Webhook configurado en: ${WEBHOOK_URL}${webhookPath}`);
+
       app.use(webhookPath, (req, res) => {
         bot.handleUpdate(req.body, res).catch(() => {});
         res.sendStatus(200);
       });
-      app.listen(PORT, () => console.log(`Express webhook listening on port ${PORT}`));
+
+      app.listen(PORT, () => {
+        console.log(`Servidor webhook corriendo en el puerto ${PORT}`);
+      });
     } catch (e) {
-      console.error('Error setting webhook:', e);
-      bot.launch();
-      app.listen(PORT, () => console.log(`Server listening on ${PORT} (polling fallback)`));
+      console.error('Error al configurar webhook:', e);
     }
   })();
 } else {
-  bot.launch();
-  app.listen(PORT, () => console.log(`Server listening on ${PORT} (bot polling)`));
+bot.launch().then(() => {
+    console.log('Bot lanzado en modo polling');
+  }).catch((e) => {
+    console.error('Error al lanzar en modo polling:', e);
+  });
 }
-
-console.log('FEDERACIÓN CORVUS - Bot iniciado.');
