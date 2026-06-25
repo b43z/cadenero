@@ -526,19 +526,34 @@ bot.command('delgroup', async (ctx) => {
   if (isNaN(index)) return ctx.reply('Uso: /delgroup <número>');
   if (index === 1) return ctx.reply('❌ Error: El grupo 1 está protegido y no se puede eliminar.');
 
-  // Buscamos el grupo basándonos en el índice (idx)
-  db.run(`DELETE FROM groups WHERE idx = ?`, [index], function (err) {
-    if (err) {
-      console.error(err);
-      return ctx.reply('Error al intentar eliminar el grupo.');
+  try {
+    // 1. Verificar si el grupo existe
+    const groupExists = await getQuery(`SELECT idx FROM groups WHERE idx = ?`, [index]);
+    if (!groupExists) {
+      return ctx.reply(`❌ No se encontró ningún grupo con el índice ${index}.`);
     }
 
-    if (this.changes > 0) {
-      ctx.reply(`✅ Grupo con índice ${index} eliminado correctamente.`);
-    } else {
-      ctx.reply(`❌ No se encontró ningún grupo con el índice ${index}.`);
+    // 2. Eliminar el grupo
+    await runQuery(`DELETE FROM groups WHERE idx = ?`, [index]);
+
+    // 3. Reorganizar los índices (idx) para que sean continuos
+    // Seleccionamos todos los registros ordenados por su índice actual
+    const rows = await allQuery(`SELECT idx FROM groups ORDER BY idx ASC`);
+    
+    // Actualizamos cada uno con un nuevo índice secuencial
+    for (let i = 0; i < rows.length; i++) {
+      await runQuery(`UPDATE groups SET idx = ? WHERE idx = ?`, [i + 1, rows[i].idx]);
     }
-  });
+
+    // 4. Opcional: Resetear el autoincremento de SQLite para el siguiente registro
+    // Esto asegura que si agregas uno nuevo, siga el orden correcto
+    await runQuery(`UPDATE sqlite_sequence SET seq = ? WHERE name = 'groups'`, [rows.length]);
+
+    ctx.reply(`✅ Grupo con índice ${index} eliminado y registros reorganizados.`);
+  } catch (err) {
+    console.error(err);
+    ctx.reply('Error al intentar eliminar y reorganizar los grupos.');
+  }
 });
 
 bot.command('gban', async (ctx) => {
