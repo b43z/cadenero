@@ -344,8 +344,8 @@ Comandos públicos:
 /help - Mostrar esta ayuda
 
 Comandos administradores:
-/addnamevalidrule - Agregar regla para ACEPTAR nombres
-/addnamedinval - Agregar regla para RECHAZAR nombres
+/addnamevalid - Agregar regla (texto simple) para ACEPTAR nombres
+/addnameinvalid - Agregar regla (texto simple) para RECHAZAR nombres
 /listnamerules - Ver reglas de nombres
 /delnamerule <id> - Borrar regla de nombre
 
@@ -481,20 +481,20 @@ bot.command('addblacklist', async (ctx) => {
 });
 
 // --- Comandos administrativos ---
-bot.command('addnamevalidrule', async (ctx) => {
+bot.command('addnamevalid', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   if (!ctx.session) ctx.session = {};
   
   ctx.session.awaiting = { action: 'add_name_valid_rule', chat_id: ctx.chat.id };
-  await ctx.reply('Regla para ACEPTAR nombres.\nEnvíame los datos en formato JSON (el tipo "allowed" se forzará automáticamente):\n\n{"pattern":"^[A-Za-z]{2,}$","description":"Nombres latinos estándar"}');
+  await ctx.reply('Regla para ACEPTAR nombres.\nEnvíame el patrón y la descripción separados por una barra vertical o pipe (|):\n\nEjemplo:\n^[A-Za-z]{2,}$ | Nombres latinos estándar');
 });
 
-bot.command('addnamedinval', async (ctx) => {
+bot.command('addnameinvalid', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   if (!ctx.session) ctx.session = {};
   
   ctx.session.awaiting = { action: 'add_name_invalid_rule', chat_id: ctx.chat.id };
-  await ctx.reply('Regla para RECHAZAR nombres.\nEnvíame los datos en formato JSON (el tipo "forbidden" se forzará automáticamente):\n\n{"pattern":"^[0-9]+$","description":"Bloquear nombres que sean solo números"}');
+  await ctx.reply('Regla para RECHAZAR nombres.\nEnvíame el patrón y la descripción separados por una barra vertical o pipe (|):\n\nEjemplo:\n^[0-9]+$ | Bloquear nombres que sean solo números');
 });
 
 bot.command('listnamerules', async (ctx) => {
@@ -845,6 +845,8 @@ bot.command('pauseall', async (ctx) => {
 });
 
 // --- Unificación exclusiva de entradas de texto ---
+
+// --- Unificación exclusiva de entradas de texto ---
 bot.on('message', async (ctx) => {
   try {
     const text = ctx.message.text || '';
@@ -872,18 +874,30 @@ bot.on('message', async (ctx) => {
       return;
     }
 
-    // 2. Lógica para procesar add_name_rule
-    if (awaiting.action === 'add_name_rule') {
+    // 2. Lógica para procesar add_name_valid_rule y add_name_invalid_rule (Texto simple con Pipe)
+    if (awaiting.action === 'add_name_valid_rule' || awaiting.action === 'add_name_invalid_rule') {
+      const parts = text.split('|');
+      const pattern = parts[0] ? parts[0].trim() : '';
+      const description = parts[1] ? parts[1].trim() : 'Sin descripción';
+      const type = awaiting.action === 'add_name_valid_rule' ? 'allowed' : 'forbidden';
+
+      if (!pattern) {
+        await ctx.reply('❌ Error: El patrón regex no puede estar vacío.');
+        ctx.session.awaiting = null;
+        return;
+      }
+
       try {
-        const obj = JSON.parse(text);
-        if (!obj.type || !obj.pattern) {
-          await ctx.reply('❌ JSON inválido.');
-        } else {
-          await runQuery(`INSERT INTO name_rules(type, pattern, description) VALUES(?, ?, ?)`, [obj.type, obj.pattern, obj.description || '']);
-          await ctx.reply('✅ Regla agregada.');
-        }
+        // Validación previa de la expresión regular para evitar fallos en ejecución
+        new RegExp(pattern, 'u');
+        
+        await runQuery(
+          `INSERT INTO name_rules(type, pattern, description) VALUES(?, ?, ?)`, 
+          [type, pattern, description]
+        );
+        await ctx.reply(`✅ Regla de tipo [${type.toUpperCase()}] agregada exitosamente.\n\n🔬 Patrón: ${pattern}\n📝 Descripción: ${description}`);
       } catch (e) {
-        await ctx.reply('❌ Error: Formato JSON inválido.');
+        await ctx.reply(`❌ Error: La expresión regular provista no es válida.\n${e.message}`);
       }
       ctx.session.awaiting = null;
       return;
