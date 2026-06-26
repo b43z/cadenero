@@ -344,36 +344,42 @@ Comandos públicos:
 /help - Mostrar esta ayuda
 
 Comandos administradores:
-/addnamevalid - Agregar regla (texto simple) para ACEPTAR nombres
-/addnameinvalid - Agregar regla (texto simple) para RECHAZAR nombres
-/listnamerules - Ver reglas de nombres
-/delnamerule <id> - Borrar regla de nombre
+/addvalidname - Agregar regla (JSON) para ACEPTAR nombres
+/listvalidnames - Ver reglas de nombres permitidos
+/delvalidname <id> - Borrar regla de nombre permitido
+
+/addnamevalid - Solicitar entrada interactiva para regla de ACEPTAR nombres
+/addnameinvalid - Solicitar entrada interactiva para regla de RECHAZAR nombres
+/listnamerules - Ver todas las reglas de nombres (Forbidden/Allowed)
+/delnamerule <id> - Borrar regla de nombre por ID
 
 /requirephoto on|off - Requisito de foto para ingresar
 /config - Modificar configuración rápida del grupo
 
 /addgroup - Agregar grupo a la federación
-/delgroup <nombre> - Borrar grupo autorizado por nombre
+/delgroup <número> - Borrar grupo autorizado por índice secuencial
 /listgroups - Ver grupos autorizados
 
-/gban <reply o user_id> <motivo> - Aplicar GBAN federación
+/gban <reply o user_id | @username> <motivo> - Aplicar GBAN federación
+/ungban <reply o user_id | @username> - Remover GBAN de la federación
 /addinfo <motivo> - Extrae y guarda datos respondiendo a un mensaje de bot
 /addblacklist - Agregar usuario a blacklist desde mensaje de bot
 /fedmsg - Enviar mensaje de federación a todos los grupos
 
-/addpurpose - Agregar propósito
+/addpurpose - Agregar propósito (máx. 60 chars)
 /listpurposes - Listar propósitos
-/delpurpose <id> - Borrar propósito
+/delpurpose <id> - Borrar propósito por ID
 /setpurpose - Seleccionar propósito del grupo
 
-/userinfo <user_id o reply> - Ver información de usuario
-/userhistory <user_id o reply> - Ver últimos 5 registros
+/userinfo <user_id o @username o reply> - Ver información de usuario y últimos 5 registros
+/userhistory <user_id o @username o reply> - Ver últimos 5 registros de historial
 
-/resetdb - Resetear bases de datos
+/resetdb - Resetear bases de datos con contraseña
+/pauseall - Pausar el bot en todos los grupos afiliados (vía privado con contraseña)
 /rawcounts - Mostrar conteo crudo de registros por tabla
 
 /pausebot - Pausar bot en este chat
-/resumebot - Reanudar funciones del bot
+/resumebot - Reanudar funciones del bot en este chat
   `;
   await ctx.reply(helpText);
 });
@@ -965,7 +971,7 @@ bot.command('pauseall', async (ctx) => {
 
 // --- Unificación exclusiva de entradas de texto ---
 
-// --- Unificación exclusiva de entradas de texto ---
+// --- Unificación exclusiva de todas las entradas de texto y estados de sesión ---
 bot.on('message', async (ctx) => {
   try {
     const text = ctx.message.text || '';
@@ -976,7 +982,7 @@ bot.on('message', async (ctx) => {
 
     // 1. Lógica para procesar la contraseña de addgroup (BORRA MENSAJE)
     if (awaiting.action === 'addgroup_confirm') {
-      await ctx.deleteMessage().catch(() => {}); // Borra la contraseña del usuario
+      await ctx.deleteMessage().catch(() => {}); // Borra la contraseña del usuario para seguridad
       
       if (!(await isAdmin(ctx))) {
         ctx.session.awaiting = null;
@@ -1022,18 +1028,23 @@ bot.on('message', async (ctx) => {
       return;
     }
 
-    // 3. Lógica para procesar fedmsg
+    // 3. Lógica para procesar fedmsg (Integrada correctamente aquí)
     if (awaiting.action === 'fedmsg') {
+      ctx.session.awaiting = null; // Limpiamos el estado inmediatamente
       const groups = await allQuery(`SELECT chat_id FROM groups WHERE chat_id != ?`, [-1000000000000]);
+      const fedtxt = `🚨     AVISO OFICIAL     🚨\n🚨FEDERACION CORVUS🚨\n======================\n${text}\n======================\n⌛️Auto borrado en 1 Hora⌛️`;
       let sentCount = 0;
+
       for (const g of groups) {
         try {
-          await ctx.telegram.sendMessage(g.chat_id, text);
+          const sent = await ctx.telegram.sendMessage(g.chat_id, fedtxt);
           sentCount++;
+          setTimeout(async () => {
+            try { await ctx.telegram.deleteMessage(g.chat_id, sent.message_id).catch(() => {}); } catch (e) {}
+          }, 60 * 60 * 1000); // 1 hora
         } catch (e) { }
       }
-      await ctx.reply(`✅ Mensaje enviado a ${sentCount} grupos.`);
-      ctx.session.awaiting = null;
+      await ctx.reply(`📢 Comunicado oficial enviado a ${sentCount} grupos afiliados.`);
       return;
     }
 
