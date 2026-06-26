@@ -387,11 +387,20 @@ Comandos administradores:
 bot.command('addgroup', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   
+  if (ctx.chat.type === 'private') {
+    return ctx.reply('❌ Este comando debe ser ejecutado dentro del grupo que deseas vincular a la Federación.');
+  }
+
   if (!ctx.session) ctx.session = {};
-  ctx.session.awaiting = { action: 'addgroup_confirm', chat_id: ctx.chat.id };
   
-  // 'force_reply: true' es lo que abre el cuadro de respuesta como en la imagen
-  await ctx.reply('Escribe la contraseña para agregar el grupo:', {
+  // Guardamos el chat_id explícito del grupo actual y la acción
+  ctx.session.awaiting = { 
+    action: 'addgroup_confirm', 
+    chat_id: ctx.chat.id,
+    chat_title: ctx.chat.title
+  };
+  
+  await ctx.reply('Escribe la contraseña de la federación para registrar este grupo:', {
     reply_markup: { force_reply: true }
   });
 });
@@ -708,38 +717,12 @@ bot.command('ungban', async (ctx) => {
   await ctx.reply(`✅ Usuario ${targetId} desbaneado globalmente.`);
 });
 
-
 bot.command('fedmsg', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   if (!ctx.session) ctx.session = {};
   ctx.session.awaiting = { action: 'fedmsg', chat_id: ctx.chat.id };
   await ctx.reply('Envíame el comunicado oficial que se enviará a todos los grupos afiliados.');
 });
-
-// Handler para procesar el comunicado
-bot.on('text', async (ctx) => {
-  if (!ctx.session || !ctx.session.awaiting) return;
-  const action = ctx.session.awaiting.action;
-
-  if (action === 'fedmsg') {
-    const mensaje = ctx.message.text;
-    ctx.session.awaiting = null;
-
-    const groups = await allQuery(`SELECT chat_id FROM groups WHERE chat_id != ?`, [-1000000000000]);
-    const fedtxt = `🚨     AVISO OFICIAL     🚨\n🚨FEDERACION CORVUS🚨\n======================\n${mensaje}\n======================\n⌛️Auto borrado en 1 Hora⌛️`;
-
-    for (const g of groups) {
-      try {
-        const sent = await ctx.telegram.sendMessage(g.chat_id, fedtxt);
-        setTimeout(async () => {
-          try { await ctx.telegram.deleteMessage(g.chat_id, sent.message_id).catch(() => {}); } catch (e) {}
-        }, 60 * 60 * 1000); // 1 hora
-      } catch (e) { }
-    }
-    await ctx.reply('📢 Comunicado oficial enviado a todos los grupos de la federación.');
-  }
-});
-
 
 bot.command('addpurpose', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
@@ -975,31 +958,45 @@ bot.command('pauseall', async (ctx) => {
 bot.on('message', async (ctx) => {
   try {
     const text = ctx.message.text || '';
+    
+    // Si el mensaje es un comando, ignorarlo aquí para que Telegraf lo mande a su command handler
+    if (text.startsWith('/')) return;
+
     if (!ctx.session) ctx.session = {};
     if (!ctx.session.awaiting) return;
 
     const awaiting = ctx.session.awaiting;
 
-    // 1. Lógica para procesar la contraseña de addgroup (BORRA MENSAJE)
+    // 1. Lógica para procesar la contraseña de addgroup
     if (awaiting.action === 'addgroup_confirm') {
-      await ctx.deleteMessage().catch(() => {}); // Borra la contraseña del usuario para seguridad
+      // Borra la contraseña del usuario inmediatamente por seguridad informática
+      await ctx.deleteMessage().catch(() => {}); 
       
-      if (!(await isAdmin(ctx))) {
-        ctx.session.awaiting = null;
-        return;
-      }
+      const targetChatId = awaiting.chat_id;
+      const targetTitle = awaiting.chat_title || ctx.chat.title || 'Grupo';
 
       if (text === BOT_PASSWORD) {
-        await runQuery(`INSERT OR REPLACE INTO groups(chat_id, title) VALUES(?, ?)`, [ctx.chat.id, ctx.chat.title || 'Grupo']);
-        await ctx.reply('✅ Grupo autorizado exitosamente.');
+        // Al usar INSERT OR IGNORE evitamos romper restricciones de unicidad de SQLite de forma abrupta
+        await runQuery(
+          `INSERT OR REPLACE INTO groups(chat_id, title, password) VALUES(?, ?, ?)`, 
+          [targetChatId, targetTitle, BOT_PASSWORD]
+        );
+        
+        // Inicializar de paso la fila en la tabla settings si no existe
+        await runQuery(
+          `INSERT OR IGNORE INTO settings(chat_id, require_photo, paused) VALUES(?, 0, 0)`,
+          [targetChatId]
+        );
+
+        await ctx.reply(`✅ El grupo "${targetTitle}" ha sido autorizado e indexado exitosamente en la Federación Corvus.`);
       } else {
-        await ctx.reply('❌ Contraseña incorrecta.');
+        await ctx.reply('❌ Contraseña de federación incorrecta. Vinculación cancelada.');
       }
       ctx.session.awaiting = null;
       return;
     }
 
-    // 2. Lógica para procesar add_name_valid_rule y add_name_invalid_rule (Texto simple con Pipe)
+    // 2. Lógica para procesar add_name_valid_rule y add_name_invalid_rule
     if (awaiting.action === 'add_name_valid_rule' || awaiting.action === 'add_name_invalid_rule') {
       const parts = text.split('|');
       const pattern = parts[0] ? parts[0].trim() : '';
@@ -1013,9 +1010,7 @@ bot.on('message', async (ctx) => {
       }
 
       try {
-        // Validación previa de la expresión regular para evitar fallos en ejecución
         new RegExp(pattern, 'u');
-        
         await runQuery(
           `INSERT INTO name_rules(type, pattern, description) VALUES(?, ?, ?)`, 
           [type, pattern, description]
@@ -1028,9 +1023,9 @@ bot.on('message', async (ctx) => {
       return;
     }
 
-    // 3. Lógica para procesar fedmsg (Integrada correctamente aquí)
+    // 3. Lógica para procesar fedmsg
     if (awaiting.action === 'fedmsg') {
-      ctx.session.awaiting = null; // Limpiamos el estado inmediatamente
+      ctx.session.awaiting = null;
       const groups = await allQuery(`SELECT chat_id FROM groups WHERE chat_id != ?`, [-1000000000000]);
       const fedtxt = `🚨     AVISO OFICIAL     🚨\n🚨FEDERACION CORVUS🚨\n======================\n${text}\n======================\n⌛️Auto borrado en 1 Hora⌛️`;
       let sentCount = 0;
@@ -1041,7 +1036,7 @@ bot.on('message', async (ctx) => {
           sentCount++;
           setTimeout(async () => {
             try { await ctx.telegram.deleteMessage(g.chat_id, sent.message_id).catch(() => {}); } catch (e) {}
-          }, 60 * 60 * 1000); // 1 hora
+          }, 60 * 60 * 1000);
         } catch (e) { }
       }
       await ctx.reply(`📢 Comunicado oficial enviado a ${sentCount} grupos afiliados.`);
@@ -1051,11 +1046,11 @@ bot.on('message', async (ctx) => {
     // 4. Lógica para procesar addpurpose
     if (awaiting.action === 'addpurpose') {
       const purposeText = text.trim();
-      if (!purposeText || purposeText.length > 60) {
-        await ctx.reply('❌ Error: El texto no puede estar vacío ni superar los 60 caracteres.');
+      if (!purposeText) {
+        await ctx.reply('❌ Error: El texto no puede estar vacío.');
       } else {
         await runQuery(`INSERT INTO purposes(purpose) VALUES(?)`, [purposeText]);
-        await ctx.reply('✅ Propósito agregado.');
+        await ctx.reply('✅ Propósito agregado exitosamente.');
       }
       ctx.session.awaiting = null;
       return;
@@ -1135,7 +1130,7 @@ bot.on('message', async (ctx) => {
     }
 
   } catch (e) {
-    console.error('Error message handler', e);
+    console.error('Error en el colector central de mensajes:', e);
   }
 });
 
