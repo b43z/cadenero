@@ -91,7 +91,7 @@ function initDb() {
 
     db.get(`SELECT COUNT(*) as c FROM groups`, (err, row) => {
       if (!err && row && row.c === 0) {
-        db.run(`INSERT INTO groups(chat_id, title, password) VALUES(?, ?, ?)`, [-1000000000000, 'GRUPO_FICTICIO_CORVUS', ''], () => {
+        db.run(`INSERT INTO groups(chat_id, title, password) VALUES(?, ?, ?)`, [-1000000000000, 'GRUPO DE INICIALIZACION CORVUS', ''], () => {
           console.log('Grupo ficticio inicializado.');
         });
       }
@@ -100,8 +100,8 @@ function initDb() {
     db.get(`SELECT COUNT(*) as c FROM purposes`, (err, row) => {
       if (!err && row && row.c === 0) {
         const stm = db.prepare(`INSERT INTO purposes(purpose) VALUES(?)`);
-        stm.run('Pláticas y cotorreo, NO XXX ni encuentros. Evita BAN.');
-        stm.run('Cotorreo HOT y XXX, NO morbo. Conocer gente, disfrutar.');
+        stm.run('Plática y Cotorreo Relax, NO es Grupo XXX ni de encuentros. Evita el Acoso y el BAN.');
+        stm.run('Platica y Cotorreo HOT, Sin Morbosos, CP y Contenido Ilegal. Evita el Acoso y el BAN');
         stm.finalize();
         console.log('Propósitos iniciales creados.');
       }
@@ -245,12 +245,12 @@ bot.on('chat_join_request', async (ctx) => {
 
     const purposeRow = await getQuery(`SELECT p.purpose FROM settings s LEFT JOIN purposes p ON s.purpose_id = p.id WHERE s.chat_id = ?`, [chatId]);
     const purposeText = purposeRow && purposeRow.purpose ? purposeRow.purpose : null;
-    const welcomeText = `Bienvenido ${user.first_name || user.username || ''} a ${req.chat.title}\n\n` +
+    const welcomeText = `😈 Bienvenido ${user.first_name || user.username || ''} a ${req.chat.title}\n\n` +
       (purposeText ? `Propósito: ${purposeText}` : 'Propósito: No definido');
 
     // Se elimina la fila del botón de Propósito, dejando solo el botón de Rechazo
     const keyboard = [
-      [{ text: 'Rechazo (solo admid) 🚫', callback_data: `manual_reject_${user.id}_${chatId}` }]
+      [{ text: 'Rechazar Solicitud (solo admid) 🚫', callback_data: `manual_reject_${user.id}_${chatId}` }]
     ];
 
     const sent = await ctx.telegram.sendMessage(chatId, welcomeText, {
@@ -581,6 +581,7 @@ bot.command('delgroup', async (ctx) => {
   }
 });
 
+// --- GBAN ---
 bot.command('gban', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
 
@@ -596,44 +597,111 @@ bot.command('gban', async (ctx) => {
     userInfo.username = u.username || '';
     if (parts.length >= 2) reason = parts.slice(1).join(' ');
   } else {
-    if (parts.length < 2) return ctx.reply('Indica el usuario (responde a su mensaje o usa /gban <id o @username> <motivo>)');
+    if (parts.length < 2) return ctx.reply('Uso: /gban <id | @username> <motivo>');
     const target = parts[1];
     if (parts.length >= 3) reason = parts.slice(2).join(' ');
 
     if (/^\d+$/.test(target)) {
       userInfo.id = Number(target);
-    } else {
-      const username = target.startsWith('@') ? target : '@' + target;
-      try {
-        const member = await ctx.telegram.getChatMember(ctx.chat.id, username);
-        userInfo.id = member.user.id;
-        userInfo.first_name = member.user.first_name || '';
-        userInfo.last_name = member.user.last_name || '';
-        userInfo.username = member.user.username || '';
-      } catch (e) {
-        return ctx.reply('No se pudo encontrar al usuario con ese username en este chat.');
+    } else if (target.startsWith('@')) {
+      const username = target.slice(1).toLowerCase();
+      const groups = await allQuery(`SELECT chat_id FROM groups WHERE chat_id != ?`, [-1000000000000]);
+      for (const g of groups) {
+        try {
+          const miembros = await ctx.telegram.getChatAdministrators(g.chat_id);
+          for (const m of miembros) {
+            if (m.user.username && m.user.username.toLowerCase() === username) {
+              userInfo.id = m.user.id;
+              userInfo.first_name = m.user.first_name || '';
+              userInfo.last_name = m.user.last_name || '';
+              userInfo.username = m.user.username || '';
+              break;
+            }
+          }
+          if (userInfo.id) break;
+        } catch {}
       }
+      if (!userInfo.id) return ctx.reply(`⚠️ No se pudo resolver el usuario ${target} en los grupos activos.`);
     }
   }
 
   if (!userInfo.id) return ctx.reply('Error al identificar al usuario.');
 
-  await runQuery(`INSERT OR IGNORE INTO banned_users(user_id, first_name, last_name, username, reason) VALUES(?, ?, ?, ?, ?)`, [userInfo.id, userInfo.first_name, userInfo.last_name, userInfo.username, reason]);
+  await runQuery(
+    `INSERT OR IGNORE INTO banned_users(user_id, first_name, last_name, username, reason) VALUES(?, ?, ?, ?, ?)`,
+    [userInfo.id, userInfo.first_name, userInfo.last_name, userInfo.username, reason]
+  );
 
   const groups = await allQuery(`SELECT chat_id FROM groups WHERE chat_id != ?`, [-1000000000000]);
-  const gbantxt = `🚨GBAN FEDERACION CORVUS \n=================\n👤 ${userInfo.id}\n👦🏻 ${userInfo.first_name || '-'}\n👪 ${userInfo.last_name || '-'}\n🌐 ${userInfo.username ? '@' + userInfo.username : '-'}\n==============================\n⌛️Auto borrado en 5 min ⌛️`;
+  const gbantxt = `🚨GBAN FEDERACION CORVUS\n=================\n👤 ${userInfo.id}\n👦🏻 ${userInfo.first_name || '-'}\n👪 ${userInfo.last_name || '-'}\n🌐 ${userInfo.username ? '@' + userInfo.username : '-'}\n📝 Motivo: ${reason}\n=================\n⌛️Auto borrado en 5 min⌛️`;
 
   for (const g of groups) {
     try {
       const sent = await ctx.telegram.sendMessage(g.chat_id, gbantxt);
       setTimeout(async () => {
-        try { await ctx.telegram.deleteMessage(g.chat_id, sent.message_id).catch(() => {}); } catch (e) {}
+        try { await ctx.telegram.deleteMessage(g.chat_id, sent.message_id).catch(() => {}); } catch {}
       }, 5 * 60 * 1000);
       await ctx.telegram.banChatMember(g.chat_id, userInfo.id).catch(() => {});
-    } catch (e) { }
+    } catch {}
   }
-  await ctx.reply('GBAN aplicado y notificación distribuida.');
+
+  await ctx.reply(`🚨 Usuario ${userInfo.username ? '@' + userInfo.username : userInfo.id} baneado globalmente.`);
 });
+
+// --- UNGBAN ---
+bot.command('ungban', async (ctx) => {
+  if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
+
+  let targetId = null;
+  const parts = ctx.message.text.split(' ').filter(Boolean);
+
+  if (ctx.message.reply_to_message) {
+    targetId = ctx.message.reply_to_message.from.id;
+  } else {
+    if (parts.length < 2) return ctx.reply('Uso: /ungban <id | @username>');
+    const target = parts[1];
+
+    if (/^\d+$/.test(target)) {
+      targetId = Number(target);
+    } else if (target.startsWith('@')) {
+      const username = target.slice(1).toLowerCase();
+      const groups = await allQuery(`SELECT chat_id FROM groups WHERE chat_id != ?`, [-1000000000000]);
+      for (const g of groups) {
+        try {
+          const miembros = await ctx.telegram.getChatAdministrators(g.chat_id);
+          for (const m of miembros) {
+            if (m.user.username && m.user.username.toLowerCase() === username) {
+              targetId = m.user.id;
+              break;
+            }
+          }
+          if (targetId) break;
+        } catch {}
+      }
+      if (!targetId) return ctx.reply(`⚠️ No se pudo resolver el usuario ${target} en los grupos activos.`);
+    }
+  }
+
+  if (!targetId) return ctx.reply('Error al identificar al usuario.');
+
+  await runQuery(`DELETE FROM banned_users WHERE user_id = ?`, [targetId]);
+
+  const groups = await allQuery(`SELECT chat_id FROM groups WHERE chat_id != ?`, [-1000000000000]);
+  const ungbanTxt = `✅ UNGBAN FEDERACION CORVUS\n=================\n👤 ${targetId}\n=================\n⌛️Auto borrado en 5 min⌛️`;
+
+  for (const g of groups) {
+    try {
+      const sent = await ctx.telegram.sendMessage(g.chat_id, ungbanTxt);
+      setTimeout(async () => {
+        try { await ctx.telegram.deleteMessage(g.chat_id, sent.message_id).catch(() => {}); } catch {}
+      }, 5 * 60 * 1000);
+      await ctx.telegram.unbanChatMember(g.chat_id, targetId).catch(() => {});
+    } catch {}
+  }
+
+  await ctx.reply(`✅ Usuario ${targetId} desbaneado globalmente.`);
+});
+
 
 bot.command('fedmsg', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
@@ -642,12 +710,40 @@ bot.command('fedmsg', async (ctx) => {
   await ctx.reply('Envíame el comunicado oficial que se enviará a todos los grupos afiliados.');
 });
 
+// Handler para procesar el comunicado
+bot.on('text', async (ctx) => {
+  if (!ctx.session || !ctx.session.awaiting) return;
+  const action = ctx.session.awaiting.action;
+
+  if (action === 'fedmsg') {
+    const mensaje = ctx.message.text;
+    ctx.session.awaiting = null;
+
+    const groups = await allQuery(`SELECT chat_id FROM groups WHERE chat_id != ?`, [-1000000000000]);
+    const fedtxt = `🚨     AVISO OFICIAL     🚨\n🚨FEDERACION CORVUS🚨\n======================\n${mensaje}\n======================\n⌛️Auto borrado en 1 Hora⌛️`;
+
+    for (const g of groups) {
+      try {
+        const sent = await ctx.telegram.sendMessage(g.chat_id, fedtxt);
+        setTimeout(async () => {
+          try { await ctx.telegram.deleteMessage(g.chat_id, sent.message_id).catch(() => {}); } catch (e) {}
+        }, 60 * 60 * 1000); // 1 hora
+      } catch (e) { }
+    }
+    await ctx.reply('📢 Comunicado oficial enviado a todos los grupos de la federación.');
+  }
+});
+
+
 bot.command('addpurpose', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
   if (!ctx.session) ctx.session = {};
+  // Guardamos la acción en sesión
   ctx.session.awaiting = { action: 'addpurpose' };
-  await ctx.reply('Envíame el texto del propósito (máx 60 caracteres).');
+  // Texto actualizado sin límite de caracteres
+  await ctx.reply('Envíame el texto del propósito (sin límite de caracteres).');
 });
+
 
 bot.command('listpurposes', async (ctx) => {
   if (!(await isAdmin(ctx))) return ctx.reply('Acceso denegado.');
@@ -662,8 +758,31 @@ bot.command('delpurpose', async (ctx) => {
   const parts = ctx.message.text.split(' ').filter(Boolean);
   if (parts.length < 2) return ctx.reply('Uso: /delpurpose <id>');
   const id = Number(parts[1]);
-  await runQuery(`DELETE FROM purposes WHERE id = ?`, [id]);
-  await ctx.reply(`Propósito ${id} eliminado si existía.`);
+
+  try {
+    // 1. Verificar si existe el propósito
+    const purposeExists = await getQuery(`SELECT id FROM purposes WHERE id = ?`, [id]);
+    if (!purposeExists) {
+      return ctx.reply(`❌ No se encontró ningún propósito con el ID ${id}.`);
+    }
+
+    // 2. Eliminar el propósito
+    await runQuery(`DELETE FROM purposes WHERE id = ?`, [id]);
+
+    // 3. Reorganizar los IDs para que sean continuos
+    const rows = await allQuery(`SELECT id FROM purposes ORDER BY id ASC`);
+    for (let i = 0; i < rows.length; i++) {
+      await runQuery(`UPDATE purposes SET id = ? WHERE id = ?`, [i + 1, rows[i].id]);
+    }
+
+    // 4. Resetear el autoincremento de SQLite
+    await runQuery(`UPDATE sqlite_sequence SET seq = ? WHERE name = 'purposes'`, [rows.length]);
+
+    ctx.reply(`✅ Propósito con ID ${id} eliminado y registros reorganizados.`);
+  } catch (err) {
+    console.error(err);
+    ctx.reply('Error al intentar eliminar y reorganizar los propósitos.');
+  }
 });
 
 bot.command('setpurpose', async (ctx) => {
