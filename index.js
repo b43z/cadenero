@@ -181,9 +181,9 @@ async function validateName(name) {
     }
   }
   
-  // 2. Control estricto de texto real: Limpiamos puntuación, emojis y espacios usando nombres estandarizados.
-  // Si no quedan al menos 2 caracteres alfabéticos reales legibles, se rechaza.
-  const cleanText = trimmed.replace(/[\p{punctuation}\p{Extended_Pictographic}\s]/gu, '');
+  // 2. Control estricto de texto real usando la propiedad universal de Letras (\p{L}).
+  // Reemplazamos todo lo que NO sea una letra (elimina emojis, números, espacios y puntuación de golpe).
+  const cleanText = trimmed.replace(/[^\p{L}]/gu, '');
   if (cleanText.length < 2) {
     return { ok: false, reason: 'El nombre debe contener al menos 2 letras reales legibles' };
   }
