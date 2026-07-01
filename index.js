@@ -100,26 +100,28 @@ function initDb() {
     db.get(`SELECT COUNT(*) as c FROM purposes`, (err, row) => {
       if (!err && row && row.c === 0) {
         const stm = db.prepare(`INSERT INTO purposes(purpose) VALUES(?)`);
-        stm.run('Plática y Cotorreo Relax, NO es Grupo XXX ni de encuentros. Evita el Acoso y el BAN.');
-        stm.run('Platica y Cotorreo HOT, Sin Morbosos, CP y Contenido Ilegal. Evita el Acoso y el BAN');
+        stm.run('Plática y Cotorreo Relax, NO es Grupo XXX ni de Encuentros, Mantente Activo. Evita el Acoso y el BAN.');
+        stm.run('Platica y Cotorreo HOT, Sin Morbosos, CP y Contenido Ilegal, Mantente Activo. Evita el Acoso y el BAN');
         stm.finalize();
         console.log('Propósitos iniciales creados.');
       }
     });
 
-    db.get(`SELECT COUNT(*) as c FROM name_rules`, (err, row) => {
+db.get(`SELECT COUNT(*) as c FROM name_rules`, (err, row) => {
       if (!err && row && row.c === 0) {
         const insert = db.prepare(`INSERT INTO name_rules(type, pattern, description) VALUES(?, ?, ?)`);
-        insert.run('forbidden', '^\\p{Punct}+$', 'Solo símbolos de puntuación');
-        insert.run('forbidden', '^[\\p{Emoji}]+$', 'Solo emoji');
+        // Reglas de Bloqueo (Forbidden)
+        insert.run('forbidden', '^[\\p{Punct}\\s]+$', 'Solo símbolos de puntuación o espacios');
+        insert.run('forbidden', '^[\\p{Emoji}\\s]+$', 'Solo emojis o espacios');
         insert.run('forbidden', '^(.)\\1{7,}$', 'Repetición exagerada de un mismo caracter (spam)');
-        insert.run('forbidden', '^[A-Za-z]$', 'Una sola letra');
-        insert.run('forbidden', '^[A-Za-z]\\p{Emoji}$', 'Una letra + emoji');
+        insert.run('forbidden', '^[A-Za-zÀ-ÖØ-öø-ÿ]$', 'Una sola letra');
+        insert.run('forbidden', '^[A-Za-zÀ-ÖØ-öø-ÿ][\\p{Punct}\\s\\p{Emoji}]+$', 'Una letra con puros símbolos o emojis');
         insert.run('forbidden', '[\\p{Script=Cyrl}]', 'Bloquear alfabeto cirílico (ruso)');
         insert.run('forbidden', '[\\p{Script=Hani}]', 'Bloquear chino/japonés');
         insert.run('forbidden', '[\\p{Script=Arabic}]', 'Bloquear árabe');
-        insert.run('allowed', '^[A-Za-zÀ-ÖØ-öø-ÿ\\-\\s]{2,}$', 'Nombres latinos con espacios o guiones');
-        insert.run('allowed', '^[A-Za-z]{2,}\\p{Emoji}$', 'Nombre >3 letras + emoji válido');
+        
+        // Reglas Permitidas (Allowed) - Flexibilizada para admitir texto acompañado de cualquier emoji o símbolo externo
+        insert.run('allowed', '[A-Za-zÀ-ÖØ-öø-ÿ]{2,}', 'Contiene al menos un nombre o palabra válida de 2 o más letras');
         insert.finalize();
         console.log('Reglas de nombres iniciales creadas.');
       }
@@ -169,6 +171,7 @@ async function validateName(name) {
   const trimmed = name.trim();
   const rules = await allQuery(`SELECT * FROM name_rules ORDER BY id ASC`);
   
+  // 1. Validar reglas de exclusión (forbidden)
   for (const r of rules.filter(x => x.type === 'forbidden')) {
     try {
       const re = new RegExp(r.pattern, 'u');
@@ -178,6 +181,14 @@ async function validateName(name) {
     }
   }
   
+  // 2. Control estricto de texto real: Limpiamos puntuación, emojis y espacios.
+  // Si no quedan al menos 2 caracteres alfabéticos reales legibles, se rechaza.
+  const cleanText = trimmed.replace(/[\p{Punct}\p{Emoji}\s]/gu, '');
+  if (cleanText.length < 2) {
+    return { ok: false, reason: 'El nombre debe contener al menos 2 letras reales legibles' };
+  }
+  
+  // 3. Validar reglas de inclusión (allowed)
   const allowedRules = rules.filter(x => x.type === 'allowed');
   if (allowedRules.length > 0) {
     for (const r of allowedRules) {
@@ -246,11 +257,11 @@ bot.on('chat_join_request', async (ctx) => {
     const purposeRow = await getQuery(`SELECT p.purpose FROM settings s LEFT JOIN purposes p ON s.purpose_id = p.id WHERE s.chat_id = ?`, [chatId]);
     const purposeText = purposeRow && purposeRow.purpose ? purposeRow.purpose : null;
     const welcomeText = `😈 Bienvenido ${user.first_name || user.username || ''} a ${req.chat.title}\n\n` +
-      (purposeText ? `Propósito: ${purposeText}` : 'Propósito: No definido');
+      (purposeText ? `El Propósito del Grupo es: ${purposeText}` : 'Propósito: No definido');
 
-    // Se elimina la fila del botón de Propósito, dejando solo el botón de Rechazo
+    // fila del botón Rechazo
     const keyboard = [
-      [{ text: 'Rechazar Solicitud (solo admid) 🚫', callback_data: `manual_reject_${user.id}_${chatId}` }]
+      [{ text: 'Rechazar Solicitud 🚫', callback_data: `manual_reject_${user.id}_${chatId}` }]
     ];
 
     const sent = await ctx.telegram.sendMessage(chatId, welcomeText, {
@@ -269,7 +280,7 @@ bot.on('chat_join_request', async (ctx) => {
           delete lastWelcomeMessages[chatId];
         }
       } catch (e) { }
-    }, 5 * 60 * 1000);
+    }, 8 * 60 * 1000);
 
   } catch (e) {
     console.error('Error en chat_join_request:', e);
@@ -281,13 +292,7 @@ bot.on('callback_query', async (ctx) => {
   try {
     const data = ctx.callbackQuery.data;
     const fromId = ctx.from.id;
-    if (data.startsWith('popup_purpose_')) {
-      const chatId = Number(data.split('_').pop());
-      const purposeRow = await getQuery(`SELECT p.purpose FROM settings s LEFT JOIN purposes p ON s.purpose_id = p.id WHERE s.chat_id = ?`, [chatId]);
-      const purposeText = purposeRow && purposeRow.purpose ? purposeRow.purpose : 'No definido';
-      await ctx.answerCbQuery(purposeText, { show_alert: true });
-      return;
-    }
+    
     if (data.startsWith('manual_reject_')) {
       const parts = data.split('_');
       const targetUserId = Number(parts[2]);
